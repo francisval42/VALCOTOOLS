@@ -29,6 +29,28 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
     height = 841.89;
   }
 
+  // Load and embed logo
+  try {
+      const logoBytes = await fetch('/valco-logo.png').then(res => res.arrayBuffer());
+      const logoImage = await pdfDoc.embedPng(logoBytes);
+      const logoDims = logoImage.scale(0.25); // Scale down 
+      const logoWidth = logoDims.width;
+      const logoHeight = logoDims.height;
+      
+      // Center top
+      const logoX = (width - logoWidth) / 2;
+      const logoY = height - 50 - logoHeight; // 50px margin from top
+      
+      page.drawImage(logoImage, {
+          x: logoX,
+          y: logoY,
+          width: logoWidth,
+          height: logoHeight,
+      });
+  } catch (e) {
+      console.warn("Could not load logo", e);
+  }
+
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const navColor = rgb(31/255, 42/255, 68/255); // #1f2a44
@@ -139,11 +161,14 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
     const bottomY = 150;
     drawText("PAYMENT DETAILS", 50, bottomY, 11, true, navColor);
     
-    // Using placeholder bank details as user didn't specify them in spec, but requested the section
-    drawText("Bank: Valco Group Bank", 50, bottomY - 20, 10);
-    drawText("BSB: 000-000", 50, bottomY - 35, 10);
-    drawText("Account: 123 456 789", 50, bottomY - 50, 10);
-    drawText(`Ref: ${invoice.invoiceNumber}`, 50, bottomY - 65, 10);
+    // Updated Bank Details
+    // VALCO ACCOUNT DETAILS: 063185 ACCOUNT: 11374231 BANK: CBA ACCOUNT NAME: VALCO GROUP FINANCIAL SERVICES
+    
+    drawText("Account Name: VALCO GROUP FINANCIAL SERVICES", 50, bottomY - 20, 10);
+    drawText("Bank: CBA", 50, bottomY - 35, 10);
+    drawText("BSB: 063185", 50, bottomY - 50, 10);
+    drawText("Account: 11374231", 50, bottomY - 65, 10);
+    drawText(`Ref: ${invoice.invoiceNumber}`, 50, bottomY - 80, 10);
   }
 
   return pdfDoc.save();
