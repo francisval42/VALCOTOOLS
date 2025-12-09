@@ -15,7 +15,7 @@ function PlaceholderTab({ title }: { title: string }) {
       </div>
       <h2 className="text-2xl font-bold text-slate-800 mb-2">{title}</h2>
       <p className="text-slate-500 max-w-md">
-        This tool is currently under development. Check back soon for updates.
+        Don't pretend you know what's going on here. If broken, please call Francis on 0426 951 399
       </p>
     </div>
   );
