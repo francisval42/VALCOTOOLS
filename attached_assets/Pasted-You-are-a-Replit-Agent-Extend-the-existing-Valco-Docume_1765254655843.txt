@@ -1,0 +1,606 @@
+You are a Replit Agent. Extend the existing **Valco Document Studio** app by adding **Tab 3: Dealership Invoice Request**.
+
+Tabs currently:
+
+1. Valco Invoice Generator (Tax Invoice) – already implemented.
+2. Private Sale Invoice – implemented.
+3. **Dealership Invoice Request** – YOU MUST BUILD THIS.
+4. Tool 4 – placeholder (leave as-is).
+
+You MUST:
+
+- Match the existing stack and style:
+  - React + TypeScript + Vite
+  - Tailwind CSS
+  - Poppins font
+  - Colours: navy `#1f2a44`, orange `#fe6900`, light greys for background.
+- Reuse the **Valco letterhead PDF** already used by Tab 1: `public/valco-letterhead.pdf`.
+  - This gives you the **top logo** and **bottom footer**. Do not recreate them in code.
+- Focus on clean, modern UI: rounded cards, subtle shadows, no harsh colours.
+- Implement **no traffic light system** for this tool.
+  - Validation happens only on Generate click with clear error messages on required fields.
+
+======================================================================
+0. Files and structure
+======================================================================
+
+Create:
+
+- `src/tabs/DealershipInvoiceRequestTab.tsx`
+- `src/lib/dealerRequest/types.ts`
+- `src/lib/dealerRequest/pdf.ts`
+
+Reuse existing helpers:
+
+- `src/lib/money.ts` (for rounding)
+- `src/lib/dates.ts` (for ISO and display dates)
+
+Ensure Tab 3 wiring is integrated into the main `App` / sidebar navigation.
+
+======================================================================
+1. Navigation – new tab
+======================================================================
+
+Update the sidebar nav to show:
+
+1. Valco Invoice Generator
+2. Private Sale Invoice
+3. **Dealership Invoice Request**
+4. Tool 4 (placeholder)
+
+When the user clicks “Dealership Invoice Request”:
+
+- Set Tab 3 as active.
+- Render `DealershipInvoiceRequestTab`.
+- Styling for the active item must mirror other tabs:
+  - Slightly lighter navy background.
+  - Thin orange bar on the left.
+  - Label in white/orange.
+
+======================================================================
+2. Data model
+======================================================================
+
+Create `src/lib/dealerRequest/types.ts`:
+
+```ts
+export type BrokerName = "Alex Qemal" | "Francis Valente";
+
+export type DealerRequestForm = {
+  // Section 1 – header
+  supplierName: string;   // "Tax Invoice Request issued to"
+  contactName?: string;   // optional contact person at dealership
+  broker: BrokerName;
+  dateIso: string;        // YYYY-MM-DD
+
+  // Client details
+  clientName: string;
+  clientAbn?: string;
+  clientAddress: string;
+
+  // Settlement numbers
+  priceOfVehicle: number;
+  deposit: number;
+  tradeIn: number;
+  refundDeposit: number;
+  financePayout: number;
+  cashBackToClient: number;
+
+  // Derived total
+  invoiceBalance: number;
+};
+Helper for invoice balance:
+
+ts
+Copy code
+export function calculateInvoiceBalance(form: DealerRequestForm): number {
+  const P = form.priceOfVehicle || 0;
+  const D = form.deposit || 0;
+  const T = form.tradeIn || 0;
+  const R = form.refundDeposit || 0;
+  const F = form.financePayout || 0;
+  const C = form.cashBackToClient || 0;
+  return P - D - T + R + F + C; // round externally
+}
+======================================================================
+3. Tab UI layout
+DealershipInvoiceRequestTab.tsx should render a single large card occupying the main area, with sections:
+
+Section 1 – Header (From / To / Date)
+
+Section 2 – Client details + Dealer instructions
+
+Section 3 – Settlement details (numbers + Invoice Balance)
+
+Section 4 – Email template (subject + body preview)
+
+No recent-history panel is required for this tab.
+
+Use the same styling as other tools:
+
+Outer wrapper: max-w-5xl mx-auto py-8 px-4
+
+Card: bg-white rounded-2xl shadow-md p-6 md:p-8 space-y-6
+
+Section 1 – From / To / Date
+Fields:
+
+Issued to (dealership / supplier) – supplierName (required)
+
+Text input.
+
+Contact name (optional) – contactName
+
+Used only for email greeting.
+
+Broker – broker (required)
+
+Dropdown with exactly:
+
+“Alex Qemal”
+
+“Francis Valente”
+
+Date – dateIso (required)
+
+Default to today in YYYY-MM-DD.
+
+Editable via <input type="date">.
+
+Layout:
+
+Two-column grid on desktop, stacked on mobile.
+
+Headline at top of card: Dealership Tax Invoice Request.
+
+You will use these for:
+
+TO: [supplierName]
+
+FROM: Valco Group – [broker]
+
+DATE: formatted from dateIso.
+
+Section 2 – Client details + instructions
+Subsection A – Client details (all required except ABN):
+
+Heading: “Client details (Invoice To / Delivery To)”.
+
+Fields:
+
+clientName – text input (required).
+
+clientAbn – optional text.
+
+clientAddress – textarea (required).
+
+Subsection B – Static instructions
+
+Under client details, render a static paragraph (and later in PDF) similar to:
+
+Please include all vehicle identifiers in your tax invoice, including:
+
+Whether the vehicle is New, Used or Demo
+
+VIN or Serial Number
+
+Engine Number
+
+Registration Number (if registered)
+
+Colour
+
+Make, Model and Badge / Series
+
+Build Date and Compliance Date
+
+Any other relevant identifiers
+
+Your dealership bank details for payment (account name, BSB and account number)
+
+No input fields here – just text.
+
+Also in this section (or just below), show a line:
+
+Broker email instruction (text only, not editable):
+
+If broker = Alex Qemal → “Please email the tax invoice to alex@vgfs.com.au.”
+
+If broker = Francis Valente → “Please email the tax invoice to francis@vgfs.com.au.”
+
+This will be duplicated in the PDF body.
+
+Section 3 – Settlement details
+Heading: “Settlement details”.
+
+Inputs:
+
+All are number inputs (Tailwind styled) with step="0.01":
+
+Price of vehicle (required)
+
+Deposit (optional)
+
+Trade in (optional)
+
+Refund deposit (optional)
+
+Finance payout (optional)
+
+Cash back to client (optional)
+
+Rules:
+
+Parse values as floats; empty string treated as 0 in state.
+
+Store numbers in DealerRequestForm.
+
+Display (below inputs):
+
+Computed Invoice Balance:
+
+Use calculateInvoiceBalance(form) and round2 to 2 decimals.
+
+Format as currency.
+
+Styling for Invoice Balance in UI:
+
+A separate row with:
+
+Label: Invoice Balance
+
+Amount: $XX,XXX.XX
+
+Style: Poppins bold, orange text, maybe slight border-top. Do not use yellow background.
+
+Later this matches the PDF styling (see section 4).
+
+======================================================================
+4. Validation behaviour
+On Generate PDF:
+
+Required fields:
+
+supplierName (Issued To)
+
+broker
+
+dateIso
+
+clientName
+
+clientAddress
+
+priceOfVehicle (must be > 0)
+
+Validation steps:
+
+Check each required field.
+
+If any invalid:
+
+Do not generate PDF.
+
+Show a single error banner at top of card:
+
+E.g. “Please complete all required fields highlighted below before generating the request.”
+
+Add red error styling to each invalid input:
+
+Border: border-red-400.
+
+Background: bg-red-50.
+
+Tiny error text below field (text-xs text-red-500) such as “Supplier name is required.”
+
+If all valid:
+
+Proceed to build DealerRequestForm object and call the PDF generator.
+
+No traffic light statuses are used.
+
+======================================================================
+5. PDF generation – Tax Invoice Request document
+Create generateDealerRequestPdf(form: DealerRequestForm): Promise<Uint8Array> in src/lib/dealerRequest/pdf.ts.
+
+Use pdf-lib and the existing Valco letterhead PDF:
+
+Load /valco-letterhead.pdf (fetch + PDFDocument.load).
+
+Create a new PDFDocument and copy the first page of the letterhead into it.
+
+Get page = pdfDoc.getPage(0) and width, height.
+
+Define margins:
+
+Left margin: x = 60 (approx, tune via test).
+
+Text top start (below logo): yStart = height - 130 (adjust so you are safely clear of logo).
+
+Bottom margin above footer: ~80.
+
+Use embedded fonts:
+
+Helvetica and Helvetica-Bold.
+
+Use navy and orange colours:
+
+Navy: (31/255, 42/255, 68/255)
+
+Orange: (254/255, 105/255, 0/255)
+
+5.1 Title and header block
+At top-left (within header safe area):
+
+Title: TAX INVOICE REQUEST
+
+Font: bold, size ~18, navy, left aligned.
+
+Below it on separate lines:
+
+TO: [supplierName]
+
+FROM: Valco Group – [broker]
+
+DATE: [formatted dateIso (DD-MMM-YY, e.g. 25-Sep-25)]
+
+5.2 Client details
+Below header, draw:
+
+Heading: Client details (Invoice / Delivery To) (bold, smaller font).
+
+Then:
+
+vbnet
+Copy code
+Client: [clientName]
+ABN: [clientAbn or ""]
+Address:
+[clientAddress multi-line]
+Wrap text as needed.
+
+5.3 Instruction section
+Under client details, add:
+
+Paragraph or bullet-list reproducing the instructions from Section 2, including:
+
+Vehicle identifiers bullet list as described in UX spec.
+
+Line: Please also include your dealership bank details (account name, BSB and account number) on the tax invoice.
+
+Immediately after, add the broker email instruction:
+
+If broker is Alex:
+
+Please email the tax invoice to alex@vgfs.com.au.
+
+If Francis:
+
+Please email the tax invoice to francis@vgfs.com.au.
+
+5.4 Settlement details table (numbers)
+Draw a settlement block in the lower half of the page.
+
+Structure similar to:
+
+nginx
+Copy code
+Price of vehicle              +    $XX,XXX.XX
+Less total deposit            -    $XX,XXX.XX
+Less trade in                 -    $XX,XXX.XX
+Plus refund deposit           +    $XX,XXX.XX
+Plus finance payout           +    $XX,XXX.XX
+Plus cash back to client      +    $XX,XXX.XX
+-----------------------------------------------
+= Invoice Balance                  $XX,XXX.XX
+Implementation:
+
+Left column: description text.
+
+Middle column: either + or - symbol.
+
+Right column: right-aligned currency amounts.
+
+Symbols:
+
+Price of vehicle: +
+
+Deposit: -
+
+Trade in: -
+
+Refund deposit: +
+
+Finance payout: +
+
+Cash back to client: +
+
+Amounts:
+
+Use round2() to create 2-decimal currency values; format with $ and thousand separators.
+
+Invoice balance:
+
+Compute invoiceBalance using the helper and round to two decimal places.
+
+Style for last row:
+
+No yellow fill.
+
+Keep same white background.
+
+Add a subtle top border (thin grey line) above the balance row.
+
+Label: = Invoice Balance in Helvetica-Bold, navy.
+
+Amount: $XX,XXX.XX in Helvetica-Bold, orange.
+
+5.5 Footer
+Do not add any extra footer text manually – the letterhead PDF already includes the bottom company block. Keep remaining vertical space free so you do not overwrite it.
+
+5.6 Export
+Save document with pdfDoc.save() and return bytes.
+
+In the tab component, create a Blob and trigger download with a filename like:
+
+${form.clientName || "Client"} - Tax Invoice Request.pdf (sanitise unsafe characters).
+
+======================================================================
+6. Email template – live updating subject & body
+In the tab UI, add a final section “Email template” beneath the settlement details.
+
+State:
+
+subject: string
+
+body: string
+
+userEditedSubject: boolean
+
+userEditedBody: boolean
+
+6.1 Default subject
+Default subject:
+
+txt
+Copy code
+Tax Invoice Request - [Client Name]
+Where [Client Name] is form.clientName. If clientName is blank, just Tax Invoice Request.
+
+6.2 Default body
+Default body should be exactly:
+
+txt
+Copy code
+Hi [Dealership Contact Name],
+
+Please see attached Tax Invoice Request for [Client Name].
+
+If you are able to reply at your earliest convenience with your Tax Invoice, it would be greatly appreciated.
+
+As soon as remittance is available, we will issue it to you for the confirmation of receipt of funds.
+
+Kind Regards,
+[Broker Name]
+[Broker Email]
+Valco Group Financial Services
+Where:
+
+[Dealership Contact Name] → form.contactName if provided, otherwise:
+
+If missing, render as Hi, (no name).
+
+[Client Name] → form.clientName.
+
+[Broker Name] → selected broker.
+
+[Broker Email]:
+
+If broker is Alex → alex@vgfs.com.au.
+
+If broker is Francis → francis@vgfs.com.au.
+
+6.3 Live updating behaviour
+The subject and body must auto-update LIVE as the user changes relevant fields until the user manually edits a given field.
+
+Implementation:
+
+Initialise subject and body from their generators on component mount with empty form.
+
+When any of the following change:
+
+form.clientName
+
+form.contactName
+
+form.broker
+
+invoiceBalance (for future if needed)
+
+Then:
+
+ts
+Copy code
+if (!userEditedSubject) setSubject(generateDefaultSubject(form));
+if (!userEditedBody) setBody(generateDefaultBody(form));
+On Subject input onChange:
+
+Update subject.
+
+Set userEditedSubject = true.
+
+On Body textarea onChange:
+
+Update body.
+
+Set userEditedBody = true.
+
+Visual layout:
+
+Card subsection:
+
+Heading: “Email template”.
+
+Subject field: simple text input.
+
+Body field: textarea (rows={7} or so).
+
+Small help text:
+
+“You can copy this into your email client. It updates automatically as you change the form until you edit it manually.”
+
+Optional utility:
+
+Add a “Copy body” button that copies body to clipboard (using navigator.clipboard.writeText) and briefly shows “Copied!” message.
+
+======================================================================
+7. QA checklist
+Before you consider this tool done, manually verify:
+
+Navigation:
+
+Sidebar shows “Dealership Invoice Request”.
+
+Clicking it switches to Tab 3 without breaking Tabs 1 or 2.
+
+Required field validation:
+
+Leaving Supplier, Broker, Date, Client Name, Client Address, or Price empty and hitting Generate shows error banner and per-field errors.
+
+Filling them removes error styling and allows PDF generation.
+
+Invoice balance:
+
+With P=50,000 D=5,000 T=10,000 R=2,000 F=3,000 C=1,000:
+
+Balance = (50,000 − 5,000 − 10,000) + 2,000 + 3,000 + 1,000 = 41,000.
+
+UI and PDF both show $41,000.00.
+
+Broker email line:
+
+Selecting Alex shows “Please email the tax invoice to alex@vgfs.com.au” both in UI and PDF.
+
+Selecting Francis shows the same line with francis@vgfs.com.au.
+
+Email template:
+
+Changing client name / contact name / broker updates subject and body when user hasn’t edited them.
+
+Once subject/body are manually edited, they stop auto-updating.
+
+Body matches exact text provided with proper substitutions.
+
+PDF layout:
+
+Uses Valco letterhead for header and footer.
+
+Title TAX INVOICE REQUEST present.
+
+Sections in order: header, client details, instructions, settlement table.
+
+Invoice Balance row emphasised with navy label and orange bold amount, no yellow highlight.
+
+No text overlaps logo or footer; margins look clean.
+
+If all of these pass and there are no TypeScript errors or console errors, Tool 3 (Dealership Invoice Request) is successfully implemented in Valco Document Studio.
