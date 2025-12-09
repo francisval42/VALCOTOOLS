@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SidebarLayout } from "./layout/SidebarLayout";
 import { PrivateSaleInvoiceTab } from "./tabs/PrivateSaleInvoiceTab";
+import { ValcoInvoiceTab } from "./tabs/ValcoInvoiceTab";
 import { Toaster } from "@/components/ui/toaster";
 import { Construction } from "lucide-react";
 
