@@ -1,29 +1,36 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
+import { SidebarLayout } from "./layout/SidebarLayout";
+import { ValcoInvoiceTab } from "./tabs/ValcoInvoiceTab";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/not-found";
+import { Construction } from "lucide-react";
 
-function Router() {
+function PlaceholderTab({ title }: { title: string }) {
   return (
-    <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
-      <Route component={NotFound} />
-    </Switch>
+    <div className="flex flex-col items-center justify-center h-[60vh] text-center p-8 bg-white rounded-xl shadow-sm border border-slate-100">
+      <div className="bg-slate-50 p-6 rounded-full mb-6">
+        <Construction className="w-12 h-12 text-slate-300" />
+      </div>
+      <h2 className="text-2xl font-bold text-slate-800 mb-2">{title}</h2>
+      <p className="text-slate-500 max-w-md">
+        This tool is currently under development. Check back soon for updates.
+      </p>
+    </div>
   );
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState("valco-invoice");
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <>
+      <SidebarLayout activeTab={activeTab} onTabChange={setActiveTab}>
+        {activeTab === "valco-invoice" && <ValcoInvoiceTab />}
+        {activeTab === "private-sale" && <PlaceholderTab title="Private Sale Invoice" />}
+        {activeTab === "dealership-request" && <PlaceholderTab title="Dealership Invoice Request" />}
+        {activeTab === "tool-4" && <PlaceholderTab title="Settings" />}
+      </SidebarLayout>
+      <Toaster />
+    </>
   );
 }
 
