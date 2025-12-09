@@ -1,0 +1,687 @@
+You are a Replit Agent. Extend the existing **Valco Document Studio** app by adding a new left sidebar tab called **“Compliance Assistant”** that contains two inner tools:
+
+1. **Requirements and Objectives** – Navaro Broker Note Generator  
+2. **Compliance Notes** – Verification, enquiries and unsuitability commentary
+
+Compliance is critical. All outputs must be:
+
+- Deterministic from form + templates
+- Editable by the broker
+- Refined with AI in a way that NEVER weakens responsible lending language or deletes key sections
+- In formal, professional Australian English
+- Structured with clear square-bracket headings, e.g. `[Client Objectives]`
+
+Assume:
+- Anthropic API access is available via environment (do not hardcode keys).
+- You can create a small Node/Express backend for the AI endpoints if needed.
+
+======================================================================
+0. Shared UI structure
+======================================================================
+
+The Document Studio already has a sidebar with other tools (Loan Calculator, Valco Invoice Generator, etc). You must:
+
+- Add a new sidebar item labeled **“Compliance Assistant”**.
+- When clicked, render a `ComplianceAssistantTab` which contains inner tabs:
+
+  - `Requirements and Objectives`
+  - `Compliance Notes`
+
+Use the same visual style as existing tabs:
+
+- Outer container: `max-w-5xl mx-auto py-8 px-4`
+- Main card: `bg-white rounded-2xl shadow-md p-6 md:p-8 space-y-6`
+- Poppins font
+- Navy `#1f2a44` for headings, orange `#fe6900` for key accents
+
+Inside `ComplianceAssistantTab`:
+
+- Render a top tab switcher (buttons or a tab bar) for the two inner tools.
+- Internally, toggle between `<RequirementsObjectivesTab />` and `<ComplianceNotesTab />`.
+
+======================================================================
+1. Requirements and Objectives – Navaro Broker Note Generator
+======================================================================
+
+Create `src/tabs/compliance/RequirementsObjectivesTab.tsx` and supporting files:
+
+- `src/lib/requirements/types.ts`
+- `src/lib/requirements/generateNote.ts`
+- `src/lib/requirements/ai.ts` (client-side calls to backend endpoints `/api/ai/compliance-wash` and `/api/ai/edit`)
+
+### 1.1 Form data model
+
+In `src/lib/requirements/types.ts`:
+
+```ts
+export type LoanType = "consumer_car" | "secured_personal" | "unsecured_personal" | "";
+
+export type BudgetFrequency = "weekly" | "fortnightly" | "monthly";
+
+export type RateType = "fixed" | "variable" | "";
+
+export interface OtherLender {
+  name: string;
+  exclusionReason: string;
+}
+
+export interface FormData {
+  // Loan type
+  loanType: LoanType;
+
+  // Client details
+  firstName: string;
+  lastName: string;
+
+  // Loan details
+  purpose: string;            // required
+  isSecured: boolean;         // auto true for consumer_car
+  securityDescription: string;// required if isSecured === true, except consumer_car auto-fill
+  loanAmount: string;         // currency string, required 2,000-250,000
+  budgetAmount: string;       // currency string, required min 50
+  budgetFrequency: BudgetFrequency;
+  term: number;               // required, 12-84
+
+  // Rate type and reasons
+  rateType: RateType;         // required
+  rateTypeReasons: string[];  // at least 1 required
+  rateTypeAdditionalJustification: string; // optional free text
+
+  // Lender selection and reasons
+  lender: string;             // required
+  lenderReasons: string[];    // at least 1 required
+  lenderAdditionalJustification: string; // optional free text
+  otherLenders: OtherLender[]; // optional
+
+  // Verification
+  incomeVerification: string[]; // at least 1 required
+  expenseVerification: string[];// at least 1 required
+
+  // Change in circumstances
+  changeInCircumstances: "no" | "yes";
+  changeDescription: string;   // required if yes
+  changeMitigation: string;    // required if yes
+
+  // Affordability
+  affordabilityJustification: string; // required only if affordabilityFlagged
+
+  // Derived / internal
+  monthlyBudget: number;       // computed from budgetAmount + frequency
+  isAffordabilityFlagged: boolean;
+}
+1.2 UI layout
+In RequirementsObjectivesTab.tsx:
+
+Use a split layout:
+
+Left: form sections (scrollable)
+
+Right: note preview + AI controls
+
+Left:
+
+Sections:
+
+Client + loan type
+
+Loan details (purpose, amount, term, budget)
+
+Rate type and reasons
+
+Lender selection and reasons
+
+Verification (income, expenses)
+
+Change in circumstances
+
+Affordability (if flagged)
+
+Right:
+
+Preview panel:
+
+Title: “Generated Requirements and Objectives Notes”
+
+A large <textarea> showing the current note text (editable).
+
+Buttons:
+
+“Generate note”
+
+“Compliance wash”
+
+“AI refine (edit)”
+
+When form changes, “Generate note” will:
+
+Validate form.
+
+Compute monthly budget.
+
+Build GeneratedNote from templates.
+
+Build a cohesive text block with headings.
+
+Place that text into the preview textarea.
+
+1.3 Dropdowns, checkboxes and options
+Follow the provided spec:
+
+Loan types
+
+Consumer Car (sets loanType = "consumer_car", isSecured = true, and auto securityDescription = "Motor vehicle being financed")
+
+Secured Personal (loanType = "secured_personal")
+
+Unsecured Personal (loanType = "unsecured_personal", isSecured = false)
+
+Term options
+
+12, 24, 36, 48, 60, 72, 84
+
+Rate type reasons
+
+If RateType is fixed, show only fixed reasons:
+
+Provides payment certainty
+
+Protects against rate rises
+
+Budgeting predictability
+
+Protection from market volatility
+
+If variable:
+
+Lower initial rate available
+
+More flexibility with payments
+
+Potential for rate reductions
+
+No break costs if refinancing
+
+Benefit from market rate drops
+
+At least one must be selected.
+
+Lender options
+
+Seed list (allow custom typing):
+
+“Now Finance”
+
+“Latitude Financial”
+
+“Wisr”
+
+“MoneyMe”
+
+“Plenti”
+
+“Pepper Money”
+
+“Other (type manually)” – if selected, show text input.
+
+Lender selection reasons (multi-select):
+
+Competitive interest rate
+
+Suitable policy and criteria
+
+Fast approval process
+
+Flexible terms and conditions
+
+Strong customer service
+
+Established lending track record
+
+At least one required.
+
+Income verification options:
+
+Employment letter / contract
+
+Recent payslips (2+ months)
+
+Bank statements showing salary credits
+
+Tax returns / accountant letter
+
+Business financial statements
+
+Centrelink statements
+
+At least one required.
+
+Expense verification options:
+
+Client interview (special rule: triggers HEM commentary)
+
+HEM (Household Expenditure Measure) (always included in display logic)
+
+Bank statements (3+ months)
+
+Credit card statements
+
+Loan statements for existing debts
+
+Rental agreements
+
+Insurance statements
+
+At least one required.
+
+1.4 Validation rules
+Implement validation:
+
+Loan amount: required, numeric 2,000–250,000.
+
+Budget amount: required, numeric min 50.
+
+Term: required, one of [12, 24, 36, 48, 60, 72, 84].
+
+Rate type: required.
+
+rateTypeReasons: at least 1.
+
+Lender: required (non-empty).
+
+LenderReasons: at least 1.
+
+IncomeVerification: at least 1.
+
+ExpenseVerification: at least 1.
+
+SecurityDescription: required if isSecured === true and loanType !== "consumer_car" (for consumer_car, auto text is fine).
+
+ChangeDescription + ChangeMitigation: required when changeInCircumstances === "yes".
+
+MonthlyBudget:
+
+Convert budgetAmount according to budgetFrequency:
+
+weekly → amount * 52 / 12
+
+fortnightly → amount * 26 / 12
+
+monthly → amount
+
+AffordabilityFlag rule:
+
+Compute:
+
+ts
+Copy code
+const loanAmt = parseFloat(loanAmount);
+const monthlyBudget = computed;
+const minimumRequired = Math.max(loanAmt * 0.005, 100);
+const isAffordabilityFlagged = monthlyBudget < minimumRequired;
+If isAffordabilityFlagged === true, then affordabilityJustification is required and the note must use the “flagged” variant text.
+
+Show error messages under offending fields and block “Generate note” until valid.
+
+1.5 GeneratedNote structure and templates
+src/lib/requirements/generateNote.ts should:
+
+Build a GeneratedNote:
+
+ts
+Copy code
+export interface GeneratedNote {
+  clientObjectives: string;
+  balloonPayment?: string;
+  interestRateType: string;
+  reasonableEnquiry: string;
+  lenderJustification: string;
+  otherLenders?: string;
+  suitabilityAssessment: string;
+  changeInCircumstances: string;
+}
+Use these templates (with square-bracket headings in final output):
+
+Client Objectives
+Heading: [Client Objectives]
+
+Template:
+
+txt
+Copy code
+{firstName} {lastName} seeks a {loanAmountFormatted} {loanTypeText} to {purpose}. The client requires a {term}-month term with a {rateTypeText} to provide payment certainty and budgeting predictability. The proposed loan structure aligns with {firstName}'s financial capacity and objectives, enabling them to achieve their stated purpose while maintaining sustainable repayment obligations.
+Where:
+
+loanTypeText mapping:
+
+consumer_car → “consumer car loan”
+
+secured_personal → “secured personal loan”
+
+unsecured_personal → “unsecured personal loan”
+
+Ensure vehicle purpose text (e.g. “purchase a used 2020 Holden Commodore Wagon for personal use”) is grammatically integrated.
+
+Balloon Payment (Consumer Car only)
+Heading: [Balloon Payment] (only if loanType === "consumer_car" and no balloon in structure).
+
+Template:
+
+txt
+Copy code
+No balloon payment has been included in this loan structure. The loan will be fully amortised over the {term}-month term, providing {firstName} with complete ownership at maturity without any additional lump-sum requirement.
+Interest Rate Type
+Heading: [Interest Rate Type]
+
+Template:
+
+txt
+Copy code
+A {rateTypeText} interest rate has been recommended for this loan based on the following considerations: {reasonsSentence}. This rate structure supports {firstName}'s preference for predictable repayments and aligns with current market conditions and the client's risk profile.
+rateTypeText is “fixed” or “variable” (string).
+
+reasonsSentence is built from rateTypeReasons and rateTypeAdditionalJustification:
+
+Join reasons with “, ” and “ and ” for the last one.
+
+If rateTypeAdditionalJustification is non-empty, append it as an additional sentence.
+
+Reasonable Enquiry (Affordability)
+Heading: [Reasonable Enquiry]
+
+Template:
+
+txt
+Copy code
+Comprehensive income verification has been conducted through {incomeVerificationText}. {expenseVerificationText} {affordabilityText}
+Income text:
+
+Use a human-readable joined list from incomeVerification options.
+
+Expense verification text:
+
+If “Client interview” selected:
+
+“Expenses were ascertained through a client interview and benchmarked against the Household Expenditure Measure (HEM).”
+
+Else:
+
+“Expense verification includes {expenseVerificationList}.”
+
+Affordability text:
+
+Normal (not flagged):
+
+txt
+Copy code
+The client's monthly budget of {monthlyBudgetFormatted} provides adequate servicing capacity for the proposed loan repayments with an appropriate buffer for financial resilience.
+Flagged:
+
+txt
+Copy code
+While the client's monthly budget of {monthlyBudgetFormatted} is below the standard minimum threshold, the following justification supports the loan's viability: {affordabilityJustification}.
+Lender Justification
+Heading: [Lender Justification]
+
+Template:
+
+txt
+Copy code
+{lender} has been selected as the recommended lender based on {lenderReasonsSentence}. The lender's assessment criteria and product features provide optimal terms for this loan structure and align with {firstName}'s profile and requirements.
+lenderReasonsSentence built from lenderReasons plus lenderAdditionalJustification if present.
+
+Other Lenders (optional)
+Heading: [Other Lenders] (only if otherLenders.length > 0)
+
+Template:
+
+txt
+Copy code
+Other lenders were considered during the assessment process. {listSentence}
+For each other lender in otherLenders:
+
+Add: {name} was excluded due to {exclusionReason}.
+Join with spaces.
+
+Suitability Assessment
+Heading: [Suitability Assessment]
+
+Template uses:
+
+loanTypeText
+
+securityText
+
+suitabilityText
+
+Security text:
+
+Consumer Car:
+“the secured structure with the motor vehicle being financed as security enables access to competitive interest rates.”
+
+Other secured with description:
+“the secured structure with {securityDescription} as security enables access to competitive interest rates.”
+
+Secured without description:
+“the secured structure enables access to competitive interest rates.”
+
+Unsecured:
+“the unsecured structure provides flexibility without requiring security.”
+
+Suitability text:
+
+Normal:
+
+txt
+Copy code
+The {term}-month term provides manageable repayments within the client's demonstrated capacity
+Flagged:
+
+txt
+Copy code
+The {term}-month term has been structured considering the client's specific circumstances and the justification provided for affordability
+Full paragraph:
+
+txt
+Copy code
+The proposed {loanTypeText} is suitable for {firstName} {lastName}'s circumstances, taking into consideration verified income, assessed expenses and stated objectives. {suitabilityText}, while {securityText}. The loan purpose of {purpose} represents responsible financial management and aligns with the client's stated goals.
+Optionally append any extra suitability justifications if you add another field.
+
+Change in Circumstances
+Heading: [Change in Circumstances]
+
+If changeInCircumstances === "yes":
+
+txt
+Copy code
+A material change in circumstances has been identified: {changeDescription}. The following mitigation measures have been implemented: {changeMitigation}. These measures ensure the client maintains capacity to service the proposed loan.
+If "no":
+
+txt
+Copy code
+No material change in circumstances has been identified that would impact the client's ability to service the proposed loan. {firstName}'s employment and financial position remain stable and consistent with the initial assessment.
+1.6 Final note string and AI integration
+Concatenate sections in this order:
+
+[Client Objectives]
+
+[Balloon Payment] (if applicable)
+
+[Interest Rate Type]
+
+[Reasonable Enquiry]
+
+[Lender Justification] (+ [Other Lenders] if present)
+
+[Suitability Assessment]
+
+[Change in Circumstances]
+
+Separate with blank lines.
+
+Place this text into the preview textarea.
+
+AI endpoints
+Create a simple Node/Express backend (if not already):
+
+POST /api/ai/compliance-wash
+Body: { note: string }
+Uses the Compliance Wash System Prompt you were given:
+
+Temperature: 0.1
+
+Max tokens: ~2048
+
+Role: review and refine note for NCCP compliance, preserving facts, headings and structure.
+
+If already compliant, return unchanged.
+
+POST /api/ai/edit
+Body: { note: string, instruction: string }
+Pre-filter instruction against blockedPatterns:
+
+ts
+Copy code
+const blockedPatterns = [
+  /\b(fuck|shit|damn|bitch|asshole|cunt)\b/i,
+  /remove affordability/i,
+  /delete verification/i,
+  /add balloon.*personal/i,
+  /remove compliance/i,
+  /remove suitability/i,
+  /delete responsible lending/i
+];
+If any pattern matches:
+
+Return:
+
+txt
+Copy code
+⚠️ Warning: That change would compromise compliance. Note unchanged.
+{originalNote}
+Else:
+
+Call Anthropic with the AI Edit System Prompt:
+
+Temperature: 0.3
+
+Max tokens: 2048
+
+Preserve:
+
+All headings, in same order
+
+All facts, figures and client data
+
+Affordability assessments
+
+Suitability justifications
+
+NCCP obligations language
+
+Return full updated note.
+
+Buttons in UI:
+
+“Compliance wash” → calls /api/ai/compliance-wash with current textarea text and replaces it with the response.
+
+“AI refine (edit)” → broker enters a short instruction (e.g. “Make wording cohesive throughout”), then call /api/ai/edit and replace textarea content with response.
+
+Note: do not automatically call AI on every generation – only when buttons are pressed, to keep cost predictable, unless you intentionally add an “auto refine on generate” step.
+
+======================================================================
+2. Compliance Notes – Verification & Unsuitability
+Implement src/tabs/compliance/ComplianceNotesTab.tsx and helper src/lib/complianceNotes/* following the previously given spec:
+
+Headings:
+
+[Client Identification]
+
+[Medicare Verification]
+
+[Income Verification]
+
+[Expense Verification]
+
+[Credit Enquiries]
+
+[Unsuitability Assessment]
+
+Form behaviour:
+
+Q1: ID – selection between:
+
+“No – Lender completed biometric ID verification prior to settlement.” (default)
+
+“Yes – The broker has personally met the client and sighted the original identification documents.”
+
+Q2: Medicare vs dependants – Yes/No + notes
+
+Q3: Income verification – checkboxes (Payslips, Bank Statements, Self Declared, Other), with mutually exclusive logic for Self Declared
+
+Q4: Expense verification – uses default HEM-based line
+
+Q5: Credit enquiries – Nil enquiries OR add enquiries table with description/outcome/commentary
+
+Q6: Unsuitability – Yes (default) / No + free text explanation
+
+See the previous detailed specification you produced; implement the form and note generation exactly as described.
+
+Note:
+
+This tool does not need AI integration initially – it can be pure template + free edit.
+
+The final textarea with generated compliance notes must be editable like the R&O tool.
+
+======================================================================
+3. No persistence / history
+Do not store previous notes beyond in-memory React state:
+
+No “recent notes” panel
+
+No database persistence
+
+No localStorage, except where the rest of the app already uses it for other tools
+
+Each session of using Requirements and Objectives and Compliance Notes is:
+
+Fill form
+
+Generate
+
+Optionally AI refine
+
+Copy and paste into CRM / document system
+
+======================================================================
+4. Testing checklist
+Verify:
+
+Compliance Assistant appears in sidebar, with inner tabs.
+
+Requirements and Objectives:
+
+Validates fields correctly.
+
+Generates square-bracket headed note in expected order.
+
+Affordability flag and justification behave as specified.
+
+AI wash and edit endpoints respond and preserve structure and compliance language even when user supplies risky instructions.
+
+Compliance Notes:
+
+All sections generate as specified.
+
+Nil vs enquiries present logic works.
+
+Unsuitability Yes/No behaves correctly.
+
+Final text is clean, cohesive, and editable.
+
+Styling:
+
+No layout regressions.
+
+Poppins and brand colours used consistently.
+
+If all above checks pass with no runtime errors or TypeScript issues, the Compliance Assistant tab with both inner tools is successfully implemented.
