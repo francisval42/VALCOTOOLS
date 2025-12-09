@@ -33,7 +33,8 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
   try {
       const logoBytes = await fetch('/valco-logo.png').then(res => res.arrayBuffer());
       const logoImage = await pdfDoc.embedPng(logoBytes);
-      const logoDims = logoImage.scale(0.25); // Scale down 
+      // Reduced scale by 20% (0.25 * 0.8 = 0.2)
+      const logoDims = logoImage.scale(0.2); 
       const logoWidth = logoDims.width;
       const logoHeight = logoDims.height;
       
@@ -55,14 +56,22 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const navColor = rgb(31/255, 42/255, 68/255); // #1f2a44
   const orangeColor = rgb(254/255, 105/255, 0/255); // #fe6900
+  const whiteColor = rgb(1, 1, 1);
 
   // Helper to draw text
-  const drawText = (text: string, x: number, y: number, size: number = 10, isBold: boolean = false, color = navColor) => {
+  const drawText = (text: string, x: number, y: number, size: number = 10, isBold: boolean = false, color = navColor, centered: boolean = false) => {
+    const textFont = isBold ? fontBold : font;
+    let finalX = x;
+    if (centered) {
+        const textWidth = textFont.widthOfTextAtSize(text, size);
+        finalX = (width - textWidth) / 2;
+    }
+    
     page.drawText(text, {
-      x,
+      x: finalX,
       y,
       size,
-      font: isBold ? fontBold : font,
+      font: textFont,
       color,
     });
   };
@@ -72,10 +81,9 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
     drawText(text, rightX - textWidth, y, size, isBold, color);
   };
 
-  // Header content (if no letterhead, we might want to add branding manually, but assuming letterhead does the heavy lifting)
-  // We will position content assuming a header area of ~150px is reserved.
-
-  let y = height - 180;
+  // Header content
+  // Increased padding between logo and heading (lowered y start)
+  let y = height - 200;
 
   // Invoice Title
   drawText("TAX INVOICE", 50, y, 24, true, navColor);
@@ -158,12 +166,11 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
 
   // Footer / Payment Details
   if (invoice.includePaymentDetails) {
-    const bottomY = 150;
+    // Moved up from 150 to 220 to sit higher
+    const bottomY = 220; 
     drawText("PAYMENT DETAILS", 50, bottomY, 11, true, navColor);
     
     // Updated Bank Details
-    // VALCO ACCOUNT DETAILS: 063185 ACCOUNT: 11374231 BANK: CBA ACCOUNT NAME: VALCO GROUP FINANCIAL SERVICES
-    
     drawText("Account Name: VALCO GROUP FINANCIAL SERVICES", 50, bottomY - 20, 10);
     drawText("Bank: CBA", 50, bottomY - 35, 10);
     drawText("BSB: 063185", 50, bottomY - 50, 10);
@@ -171,5 +178,33 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
     drawText(`Ref: ${invoice.invoiceNumber}`, 50, bottomY - 80, 10);
   }
 
-  return pdfDoc.save();
+  // Footer Box
+  const footerHeight = 100;
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: footerHeight,
+    color: navColor,
+  });
+
+  // Footer Text
+  // VALCO GROUP PTY LTD
+  // ABN 96 648 565 226
+  // 510 / 89 - 93 High St, Kew VIC 3101
+  // 03 8456 9966
+  // accounts@vgfs.com.au
+  
+  let footerY = footerHeight - 25;
+  const footerLineHeight = 14;
+  
+  drawText("VALCO GROUP PTY LTD", 0, footerY, 10, false, whiteColor, true);
+  footerY -= footerLineHeight;
+  drawText("ABN 96 648 565 226", 0, footerY, 10, false, whiteColor, true);
+  footerY -= footerLineHeight;
+  drawText("510 / 89 - 93 High St, Kew VIC 3101", 0, footerY, 10, false, whiteColor, true);
+  footerY -= footerLineHeight;
+  drawText("03 8456 9966", 0, footerY, 10, false, whiteColor, true);
+  footerY -= footerLineHeight;
+  drawText("accounts@vgfs.com.au", 0, footerY, 10, false, whiteColor, true);
 }
