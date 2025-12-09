@@ -387,14 +387,9 @@ export function PrivateSaleInvoiceTab() {
             <CardHeader className="border-b border-slate-100 bg-white pb-4">
                 <div className="flex items-center justify-between">
                     <CardTitle className="text-xl text-slate-800">Private Sale Invoice</CardTitle>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={handleReset}>
-                            <RotateCcw className="w-4 h-4 mr-2" /> Reset
-                        </Button>
-                        <Button size="sm" onClick={handleGenerate}>
-                            <Save className="w-4 h-4 mr-2" /> Generate PDF
-                        </Button>
-                    </div>
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                        <RotateCcw className="w-4 h-4 mr-2" /> Reset
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="p-6 space-y-8">
@@ -595,6 +590,20 @@ export function PrivateSaleInvoiceTab() {
                     <div className="mt-8">
                         <DisbursementTable disbursements={disbursements} onChange={setDisbursements} />
                     </div>
+                </div>
+
+                <div className="h-px bg-slate-100" />
+
+                {/* Generate PDF Button */}
+                <div className="pt-4">
+                    <Button 
+                        size="lg" 
+                        onClick={handleGenerate}
+                        className="w-full bg-primary hover:bg-primary/90 text-white shadow-lg shadow-orange-200"
+                        data-testid="button-generate-pdf"
+                    >
+                        <Save className="w-5 h-5 mr-2" /> Generate PDF
+                    </Button>
                 </div>
 
             </CardContent>
