@@ -14,7 +14,7 @@ export function SidebarLayout({ children, activeTab, onTabChange }: SidebarLayou
       <aside className="fixed inset-y-0 left-0 w-[280px] bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-10">
         <div className="h-20 flex items-center px-8 border-b border-white/10">
           <h1 className="text-2xl font-bold tracking-wide text-white">
-            VALC<span className="text-primary italic">OS</span>
+            VALC<span className="text-primary italic underline decoration-primary decoration-2 underline-offset-4">OS</span>
           </h1>
         </div>
         
