@@ -16,7 +16,7 @@ interface InvoiceFormProps {
   invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
-  reference: string;
+  reference?: string;
   recipient: InvoiceParty;
   mode: TaxInvoiceMode;
   includePaymentDetails: boolean;

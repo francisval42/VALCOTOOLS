@@ -207,4 +207,6 @@ export async function generateTaxInvoicePdf(invoice: TaxInvoice): Promise<Uint8A
   drawText("03 8456 9966", 0, footerY, 10, false, whiteColor, true);
   footerY -= footerLineHeight;
   drawText("accounts@vgfs.com.au", 0, footerY, 10, false, whiteColor, true);
+
+  return pdfDoc.save();
 }
