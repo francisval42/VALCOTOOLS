@@ -13,8 +13,8 @@ export function SidebarLayout({ children, activeTab, onTabChange }: SidebarLayou
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-[280px] bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-10">
         <div className="h-20 flex items-center px-8 border-b border-white/10">
-          <h1 className="text-xl font-bold tracking-wider text-white">
-            VALCO <span className="text-primary font-light">GROUP</span>
+          <h1 className="text-2xl font-bold tracking-wide text-white">
+            VALC<span className="text-primary italic">OS</span>
           </h1>
         </div>
         
@@ -23,7 +23,7 @@ export function SidebarLayout({ children, activeTab, onTabChange }: SidebarLayou
         </div>
 
         <div className="p-6 border-t border-white/10 text-xs text-sidebar-foreground/40 text-center">
-          &copy; {new Date().getFullYear()} Valco Group
+          &copy; {new Date().getFullYear()} VALC<span className="text-primary/60 italic">OS</span>
         </div>
       </aside>
 
