@@ -1,0 +1,904 @@
+You are a Replit Agent. Extend the existing **Valco Document Studio** app by adding Tab 2: **Private Sale Invoice**.
+
+Tab 1 (Valco Invoice Generator) is already built. You must:
+- Keep the overall app structure and design consistent with Tab 1.
+- Add a new tab in the left sidebar called **“Private Sale Invoice”**.
+- Implement a full Private Sale Invoice builder with:
+  - Manual form inputs
+  - Optional **DoxAI inspection report upload & parser**
+  - A **traffic light status system** (red / yellow / green) per field
+  - Polished PDF output (no Valco letterhead, no logo)
+  - UX quality equal to or better than Tab 1.
+
+The provided file `DoxAI_Asset_Verification_InspectionReport_105203.pdf` is an example of the inspection report whose structure you must support. Parse it in the browser and extract key fields as described below.
+
+======================================================================
+0. General requirements
+======================================================================
+
+Tech stack and conventions must match Tab 1:
+
+- React + TypeScript + Vite
+- Tailwind CSS for styling
+- Poppins font
+- Same navy (`#1f2a44`) and orange (`#fe6900`) palette, with soft grey backgrounds
+- pdf-lib for PDF creation
+- localStorage for persistence
+
+Do NOT change Tab 1 behaviour. Only extend.
+
+Directory structure additions (suggested):
+
+- `src/tabs/PrivateSaleInvoiceTab.tsx`
+- `src/lib/privateSale/types.ts`
+- `src/lib/privateSale/doxaiParser.ts`
+- `src/lib/privateSale/storage.ts`
+- `src/lib/privateSale/pdf.ts`
+- `src/components/TrafficLightInput.tsx`
+- `src/components/DisbursementTable.tsx`
+- Reuse `lib/money.ts`, `lib/dates.ts` where possible.
+
+======================================================================
+1. Navigation – integrate Tab 2
+======================================================================
+
+Update the existing sidebar so it has four items:
+
+1. **Valco Invoice Generator** (existing, Tab 1)
+2. **Private Sale Invoice** (NEW, Tab 2)
+3. Private Sale Invoice (placeholder) can be renamed to “Dealership Invoice Request” if it was previously added as a placeholder.
+4. Tool 4 (placeholder)
+
+When the user clicks “Private Sale Invoice”:
+
+- Render `PrivateSaleInvoiceTab`.
+- Visual style of the active tab item must match Tab 1 (orange accent, lighter navy background, etc).
+
+======================================================================
+2. Data model for Private Sale Invoice
+======================================================================
+
+Create `src/lib/privateSale/types.ts` with these types:
+
+```ts
+export type GstMode = "GST_INC" | "NO_GST";
+
+export type FieldStatus = "missing" | "autoFilled" | "confirmed";
+
+export type FieldId =
+  | "vendorName"
+  | "vendorAddress"
+  | "buyerName"
+  | "buyerAddress"
+  | "vehicleMake"
+  | "vehicleModel"
+  | "vehicleDescription"
+  | "vehicleVin"
+  | "vehicleEngineNumber"
+  | "vehicleRegistration"
+  | "vehicleOdometer"
+  | "vehicleBuildDate"
+  | "vehicleComplianceDate"
+  | "invoiceAmount";
+
+export type FieldState = {
+  value: string;
+  status: FieldStatus;
+  initialSource: "empty" | "manual" | "parser";
+};
+
+export type PrivateSaleDisbursement = {
+  id: string;
+  amount: number;
+  accountName: string;
+  bsb: string;
+  accountNumber: string;
+};
+
+export type PrivateSaleInvoice = {
+  id: string;
+  title: "TAX INVOICE" | "INVOICE"; // derived from gstMode
+  invoiceDate: string; // ISO YYYY-MM-DD
+  gstMode: GstMode;
+
+  vendor: {
+    name: string;
+    abn?: string;
+    address?: string;
+  };
+
+  buyer: {
+    name: string;
+    address?: string;
+  };
+
+  vehicle: {
+    make: string;
+    model: string;
+    description?: string;
+    vin?: string;
+    engineNumber?: string;
+    registration?: string;
+    odometer?: string;
+    buildDate?: string;
+    complianceDate?: string;
+  };
+
+  invoiceAmount: number;  // as entered (inc GST or not depending on mode)
+  gstAmount: number;      // derived if GST_INC, else 0
+  totalPayable: number;   // equals invoiceAmount
+
+  disbursements: PrivateSaleDisbursement[];
+
+  includeVendorSignature: boolean;
+  includeBuyerSignature: boolean;
+};
+You will maintain an internal map of FieldId -> FieldState in the tab component for the traffic light system.
+
+======================================================================
+3. Traffic light field status system
+Every important text input in the Private Sale form must have a status:
+
+"missing" → red (required, currently blank)
+
+"autoFilled" → yellow (auto-filled by parser, user hasn’t confirmed)
+
+"confirmed" → green (user has interacted and the field has content)
+
+Also track initialSource:
+
+"empty" – started empty
+
+"manual" – first filled by user
+
+"parser" – first filled by the DoxAI parser
+
+3.1 Fields that must use traffic lights
+At minimum, the following required fields use the status system:
+
+vendorName
+
+vendorAddress
+
+buyerName
+
+buyerAddress
+
+vehicleMake
+
+vehicleModel
+
+vehicleVin
+
+vehicleRegistration
+
+vehicleOdometer
+
+invoiceAmount
+
+Other fields (description, engine number, build/compliance) can also use it but may be optional.
+
+3.2 Initialisation
+When the tab loads:
+
+For each required field:
+
+value = ""
+
+initialSource = "empty"
+
+status = "missing" (red)
+
+3.3 Manual entry before parsing
+If user types into a blank field:
+
+On first change:
+
+initialSource = "manual"
+
+status = "confirmed" (green)
+
+Subsequent changes keep "confirmed" unless user deletes everything.
+
+If a previously confirmed field is cleared and blurred:
+
+If required: set status = "missing".
+
+3.4 After DoxAI parsing
+When a DoxAI report is parsed and yields values:
+
+For each field:
+
+If field.value is empty:
+
+Set value = parsedValue.
+
+Set initialSource = "parser".
+
+Set status = "autoFilled" (yellow).
+
+If field.value is non-empty and status === "confirmed":
+
+Do not overwrite.
+
+If parser cannot find a value and the field is empty:
+
+Keep status = "missing".
+
+3.5 User confirmation after parsing
+For a field with status === "autoFilled":
+
+On focus: do nothing.
+
+On blur:
+
+If value is still non-empty:
+
+Set status = "confirmed" (green).
+
+If value was cleared:
+
+Set status = "missing" (red if required).
+
+For status === "missing":
+
+When user types a non-empty value, immediately set status = "confirmed".
+
+3.6 UI implementation
+Create a reusable component TrafficLightInput in src/components/TrafficLightInput.tsx.
+
+Props:
+
+fieldState: FieldState
+
+onChange(value: string)
+
+onBlur()
+
+Other input props (placeholder, label, etc.)
+
+Apply Tailwind classes:
+
+tsx
+Copy code
+const base = "w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2";
+const statusClass =
+  status === "missing"
+    ? "border-red-400 bg-red-50 focus:ring-red-300"
+    : status === "autoFilled"
+    ? "border-amber-400 bg-amber-50 focus:ring-amber-300"
+    : "border-emerald-400 bg-emerald-50 focus:ring-emerald-300";
+Use this component for the key fields listed above.
+
+======================================================================
+4. DoxAI inspection report upload and parsing
+You must implement a small helper panel at the top of the Private Sale tab:
+
+Inspection report (optional)
+Drop DoxAI report here or click to upload
+[Parse report] button
+
+4.1 Upload UI
+Use a dropzone-style card similar to the Document Normaliser upload.
+
+Accept only PDFs.
+
+Store the selected file in state.
+
+Provide a button “Parse report” that triggers the parsing pipeline.
+
+4.2 Text extraction
+Use pdfjs-dist on the client to extract text from all pages of the uploaded PDF.
+
+High level steps:
+
+Load the PDF with getDocument.
+
+For each page:
+
+Call page.getTextContent().
+
+Build a plain text string from the text items.
+
+Concatenate all page texts into a single string fullText.
+
+You have the sample report attached to this prompt. Use it to test and tune the parser.
+
+4.3 Parsing rules
+Implement parseDoxaiReport(text: string) in src/lib/privateSale/doxaiParser.ts.
+
+Return an object like:
+
+ts
+Copy code
+export type DoxaiParsed = {
+  vendorName?: string;
+  vendorAddress?: string;
+  buyerName?: string; // likely not present; leave empty
+  vehicleMake?: string;
+  vehicleModel?: string;
+  vehicleDescription?: string;
+  vehicleVin?: string;
+  vehicleEngineNumber?: string;
+  vehicleRegistration?: string;
+  vehicleOdometer?: string;
+  vehicleBuildYear?: string;
+  vehicleComplianceYearMonth?: string;
+};
+Parsing strategy using known labels from the example:
+
+Seller / vendor details
+
+From the Inspection Details section (page 1):
+
+Look for lines containing:
+
+“Seller First name” and “Seller Last name”
+
+Extract “Ashley” and “Gill” (sample) and combine to vendorName = "Ashley Gill".
+
+From the Photo Identification section (page 2):
+
+Find line beginning with “Address”.
+
+Extract the rest of that line as vendorAddress (e.g. U 1 34 FIRST AVENUE PALM BEACH 4221).
+
+Vehicle details
+
+VIN:
+
+Find “VIN MNAUM2F50KW977225” style text.
+
+Extract token after VIN as vehicleVin.
+
+Registration:
+
+Find “Number Plate 741AT4” or Registration plate number: 741AT4 and use the plate number.
+
+Odometer:
+
+Find “Odometer Reading 107858”.
+
+Extract the numeric token.
+
+NEVDIS block (page with “Serial Number Search Certificate” / “Additional Motor Vehicle Details – NEVDIS”):
+
+After Make: until end of that line → vehicleMake.
+
+After Model: → vehicleModel.
+
+After Body type: → vehicleDescription (e.g. DUAL CAB TRUCK).
+
+After Engine number: → vehicleEngineNumber.
+
+Year of manufacture: → vehicleBuildYear.
+
+Year/Month of compliance: → vehicleComplianceYearMonth.
+
+If any of these values are missing, the corresponding fields stay undefined.
+
+4.4 Applying parsed values to field state
+When parseDoxaiReport returns data:
+
+For each mapped field:
+
+If fieldState.value is currently empty:
+
+Set value = parsedValue.
+
+Set initialSource = "parser".
+
+Set status = "autoFilled" (yellow).
+
+If fieldState.value is not empty and status === "confirmed":
+
+Do not override.
+
+Map parser output to fields as follows:
+
+vendorName ← vendorName
+
+vendorAddress ← vendorAddress
+
+vehicleMake ← vehicleMake
+
+vehicleModel ← vehicleModel
+
+vehicleDescription ← vehicleDescription
+
+vehicleVin ← vehicleVin
+
+vehicleEngineNumber ← vehicleEngineNumber
+
+vehicleRegistration ← vehicleRegistration
+
+vehicleOdometer ← vehicleOdometer
+
+vehicleBuildDate ← vehicleBuildYear
+
+vehicleComplianceDate ← vehicleComplianceYearMonth (to be shown as MM/YYYY in the PDF, you can keep raw string in the field)
+
+Also show a small summary under the upload card listing which fields were filled, e.g.:
+
+Filled from report:
+Vendor: Ashley Gill, U 1 34 FIRST AVENUE PALM BEACH 4221
+Vehicle: 2019 FORD RANGER, VIN MNAUM2F50KW977225, Rego 741AT4, Odometer 107858
+
+If parsing fails or the text does not look like a DoxAI report:
+
+Show a gentle message:
+
+“Could not recognise this as a DoxAI inspection report. Please fill the details manually.”
+
+Do not crash the app.
+
+======================================================================
+5. Manual Private Sale form – fields & UX
+PrivateSaleInvoiceTab.tsx should render:
+
+Left side: a large card containing:
+
+Inspection report upload panel (top)
+
+Seller / buyer / vehicle / pricing fields
+
+Disbursement table
+
+Signature options
+
+Right side: a narrow card showing “Recent private sale invoices” (similar to Tab 1 recent invoices).
+
+5.1 Invoice metadata & GST
+Controls:
+
+Invoice date:
+
+Type date input.
+
+Default to today (using same helper as Tab 1).
+
+GST mode checkbox:
+
+[x] GST Inc (amount includes 10 percent GST)
+
+Behaviour:
+
+If checked: gstMode = "GST_INC", document title later will be TAX INVOICE.
+
+If unchecked: gstMode = "NO_GST", document title will be INVOICE and no GST row appears in the invoice totals.
+
+There is no invoice number here.
+
+5.2 Vendor section
+Fields (with traffic lights on at least vendorName and vendorAddress):
+
+Vendor name (required)
+
+Vendor ABN (optional)
+
+Vendor address (required)
+
+Vendor phone (optional)
+
+Vendor email (optional)
+
+Layout:
+
+Card section with heading “Vendor details” and body fields stacked, two columns where screen width allows.
+
+5.3 Invoice / Delivery To (Buyer) section
+Fields:
+
+Buyer name (required)
+
+Buyer address (required)
+
+This is the “Invoice / Delivery To Name/Address” from your notes.
+
+5.4 Vehicle section
+Fields (traffic light on key ones):
+
+Make (required)
+
+Model (required)
+
+Description (optional)
+
+VIN / Serial number (required)
+
+Engine number (optional)
+
+Registration (required)
+
+Odometer (required)
+
+Build date (optional string – display as typed)
+
+Compliance date (optional string – display as typed)
+
+Layout: neat two-column grid similar to your current template.
+
+5.5 Pricing section
+Single invoice amount:
+
+Label: Invoice amount
+
+Input: number field, step 0.01 (traffic-light managed).
+
+UX text below:
+
+“Assumed GST inclusive when GST Inc is ticked. If GST Inc is unticked, this is treated as GST-free.”
+
+Derived values (shown read-only below):
+
+If gstMode === "GST_INC":
+
+GST (10%): invoiceAmount - (invoiceAmount / 1.10).
+
+If gstMode === "NO_GST":
+
+No GST line.
+
+Total payable is always equal to invoiceAmount. Show:
+
+Total payable: $X,XXX.XX (bold).
+
+5.6 Disbursement details – Direction to pay
+Create DisbursementTable component.
+
+Each disbursement row:
+
+Amount
+
+Account name
+
+BSB
+
+Account number
+
+Controls:
+
++ Add disbursement button to append a new row.
+
+Trash icon to remove row.
+
+We do not enforce that amounts must sum to invoice amount, but we can show a small line under the table:
+
+“Total of disbursements: $Y,YYY.YY”
+
+If totals differ from invoiceAmount, show the difference: “Difference vs invoice amount: $Z.ZZ” but this is informational only.
+
+5.7 Signature options
+Checkboxes:
+
+[x] Include vendor signature block
+
+[x] Include buyer signature block
+
+Defaults: both checked.
+
+They control whether signature blocks appear in the PDF.
+
+======================================================================
+6. Recent Private Sale invoices storage
+Just like Tab 1, keep a history of the last 5 private sale invoices.
+
+Create src/lib/privateSale/storage.ts:
+
+localStorage key: "valco_private_sale_invoices_v1"
+
+Functions:
+
+getRecentPrivateSaleInvoices(): PrivateSaleInvoice[]
+
+addRecentPrivateSaleInvoice(inv: PrivateSaleInvoice): PrivateSaleInvoice[]
+
+Prepend new invoice, unique by id.
+
+Truncate to max 5.
+
+clearRecentPrivateSaleInvoices(): void
+
+PrivateSaleInvoiceTab should:
+
+Load recent invoices on mount.
+
+Show them in a right-hand panel:
+
+Each item:
+
+Date
+
+Vendor name
+
+Buyer name
+
+Vehicle make & model (if available)
+
+Invoice amount
+
+Button: Load
+
+When Load is clicked:
+
+Populate all fields and traffic-light states:
+
+Set every field with value from the invoice.
+
+Set status = "confirmed" for any non-empty value.
+
+Set status = "missing" for empty required fields.
+
+Set initialSource = "manual" for non-empty, "empty" for empty.
+
+Provide “Clear history” button to wipe the list.
+
+======================================================================
+7. PDF generation – Private sale invoice
+Create src/lib/privateSale/pdf.ts with:
+
+ts
+Copy code
+export async function generatePrivateSaleInvoicePdf(inv: PrivateSaleInvoice): Promise<Uint8Array>;
+Use pdf-lib to create a single page A4 document.
+
+Important: this document should NOT use the Valco letterhead. It is a neutral invoice between vendor and buyer.
+
+7.1 Visual style
+Font: Helvetica and Helvetica-Bold.
+
+Colours: mostly black/grey text; small use of navy for section headings.
+
+Clean table layout, similar to the screenshot user provided.
+
+No Valco logo.
+
+7.2 Layout structure
+Rough vertical layout:
+
+Title and date
+
+Top left:
+
+TAX INVOICE if inv.gstMode === "GST_INC"
+
+INVOICE if inv.gstMode === "NO_GST"
+
+Top right:
+
+Invoice Date: DD/MM/YYYY (format from inv.invoiceDate)
+
+Vendor details box
+
+Label: Vendor details
+
+Name: vendor name
+
+ABN: vendor ABN if present
+
+Address: vendor address (wrap multiple lines)
+
+Vendor warranties text
+
+Insert the 3 bullet points in a paragraph under a heading The vendor warrants:.
+
+Invoice / Delivery To box
+
+Label: Invoice / Delivery To
+
+Buyer name and address.
+
+Vehicle description box
+
+Create a two-column table:
+
+Left column:
+
+Make
+
+Model
+
+Description
+
+Build date
+
+Compliance date
+
+Right column:
+
+VIN
+
+Engine number
+
+Registration
+
+Odometer
+
+Invoice amount and totals
+
+Right aligned block:
+
+Invoice amount: $X,XXX.XX
+
+If GST_INC:
+
+GST (10%): $YYY.YY
+
+Total payable: $X,XXX.XX (bold)
+
+Direction to pay – Disbursements
+
+Heading: Direction to pay
+
+Table with columns:
+
+No. (1, 2, 3…)
+
+Account name
+
+BSB
+
+Account number
+
+Amount
+
+For each inv.disbursements row, draw a row in the table.
+
+Signature blocks (optional)
+
+If includeVendorSignature:
+
+Draw a line with label Vendor signature aligned left.
+
+If includeBuyerSignature:
+
+Draw a line with label Buyer signature below the vendor line.
+
+Prepared by footer (subtle)
+
+Optionally (you choose based on context or the user preference flag) draw very small grey text at bottom-center:
+
+Prepared by Valco Group Financial Services
+
+7.3 Calculations
+Before building the PDF:
+
+If gstMode === "GST_INC":
+
+gstAmount = invoiceAmount - (invoiceAmount / 1.10)
+
+totalPayable = invoiceAmount
+
+If gstMode === "NO_GST":
+
+gstAmount = 0
+
+totalPayable = invoiceAmount
+
+Round to 2 decimals.
+
+======================================================================
+8. Generate & validation flow
+In PrivateSaleInvoiceTab:
+
+User fills fields (manually or via parser).
+
+When “Generate PDF” is clicked:
+
+Validate required fields (see list in section 3.1):
+
+For each missing required field (empty string):
+
+Ensure status = "missing" (red).
+
+If any required field is missing, show an error banner:
+
+“Please complete all required fields (highlighted in red) before generating the invoice.”
+
+Do not attempt PDF generation.
+
+If validation passes:
+
+Construct a PrivateSaleInvoice object from field state and other inputs.
+
+Call generatePrivateSaleInvoicePdf.
+
+Trigger download of the result with a filename like:
+
+${invoiceDate}_${vendorName}_${vehicleMake}_${vehicleModel}.pdf (sanitize).
+
+On success:
+
+Assign a unique id (e.g. Date.now().toString()).
+
+Call addRecentPrivateSaleInvoice(inv) to store in history.
+
+Optionally show a success toast.
+
+======================================================================
+9. UX and styling details
+Reuse the same global layout styles from Tab 1:
+
+Main panel max-w-5xl mx-auto py-8 px-4
+
+Cards with rounded-2xl bg-white shadow-md
+
+Use section headings styled like:
+
+text-xs font-semibold tracking-wide text-slate-500 uppercase
+
+With a small orange underline or icon for personality.
+
+Keep spacing generous; avoid cramped fields.
+
+Use the traffic light colours subtly; they should be visible but not harsh.
+
+Summarise the GST and inspection upload behaviour near the top in small help text so the UX feels self-explanatory.
+
+======================================================================
+10. QA checklist
+Before considering Tab 2 complete, verify manually:
+
+Navigation:
+
+Sidebar shows “Private Sale Invoice”.
+
+Clicking it switches to the new tab and leaves Tab 1 unchanged.
+
+Traffic lights:
+
+Required fields start red (missing).
+
+Typing into them turns them green.
+
+Uploading the sample DoxAI report fills many fields and marks them yellow.
+
+Tabbing into and out of a yellow field (without clearing it) turns it green.
+
+DoxAI parsing:
+
+Upload the provided DoxAI_Asset_Verification_InspectionReport_105203.pdf.
+
+After parsing, the form should prefill:
+
+Vendor name ≈ “Ashley Gill”
+
+Vendor address ≈ “U 1 34 FIRST AVENUE PALM BEACH 4221”
+
+Make: FORD, Model: RANGER, etc.
+
+Any unparsable fields remain red until filled manually.
+
+GST / title:
+
+With GST Inc checked:
+
+PDF title: TAX INVOICE.
+
+GST line shows 10 percent of invoice amount.
+
+With GST Inc unchecked:
+
+PDF title: INVOICE.
+
+No GST line appears.
+
+Direction to pay:
+
+Multiple disbursement rows render correctly in the PDF.
+
+Recent invoices:
+
+After generating a few, the Recent panel shows up to 5.
+
+Clicking Load repopulates the form and sets all non-empty fields to green.
+
+Clear history removes them.
+
+Styling:
+
+Visually consistent with Tab 1.
+
+No console errors or TypeScript type errors.
+
+If all items above pass, the Private Sale Invoice tab is implemented correctly and ready for real use.

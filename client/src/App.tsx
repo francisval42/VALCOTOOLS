@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SidebarLayout } from "./layout/SidebarLayout";
-import { ValcoInvoiceTab } from "./tabs/ValcoInvoiceTab";
+import { PrivateSaleInvoiceTab } from "./tabs/PrivateSaleInvoiceTab";
 import { Toaster } from "@/components/ui/toaster";
 import { Construction } from "lucide-react";
 
@@ -25,7 +25,7 @@ function App() {
     <>
       <SidebarLayout activeTab={activeTab} onTabChange={setActiveTab}>
         {activeTab === "valco-invoice" && <ValcoInvoiceTab />}
-        {activeTab === "private-sale" && <PlaceholderTab title="Private Sale Invoice" />}
+        {activeTab === "private-sale" && <PrivateSaleInvoiceTab />}
         {activeTab === "dealership-request" && <PlaceholderTab title="Dealership Invoice Request" />}
         {activeTab === "tool-4" && <PlaceholderTab title="Settings" />}
       </SidebarLayout>
