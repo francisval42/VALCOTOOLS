@@ -170,15 +170,9 @@ export function DealershipInvoiceRequestTab() {
         <CardContent className="p-6 md:p-8 space-y-8">
           
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Dealership Tax Invoice Request</h2>
-              <p className="text-slate-500 text-sm mt-1">Generate a tax invoice request to send to dealerships.</p>
-            </div>
-            <Button onClick={handleGenerate} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-orange-200">
-              <Save className="w-4 h-4 mr-2" />
-              Generate PDF
-            </Button>
+          <div className="border-b border-slate-100 pb-6">
+            <h2 className="text-2xl font-bold text-slate-900">Dealership Tax Invoice Request</h2>
+            <p className="text-slate-500 text-sm mt-1">Generate a tax invoice request to send to dealerships.</p>
           </div>
 
           {/* Error Banner */}
@@ -433,6 +427,20 @@ export function DealershipInvoiceRequestTab() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="h-px bg-slate-100" />
+
+          {/* Generate PDF Button */}
+          <div className="pt-4">
+            <Button 
+              size="lg" 
+              onClick={handleGenerate}
+              className="w-full bg-primary hover:bg-primary/90 text-white shadow-lg shadow-orange-200"
+              data-testid="button-generate-pdf"
+            >
+              <Save className="w-5 h-5 mr-2" /> Generate PDF
+            </Button>
           </div>
 
         </CardContent>
