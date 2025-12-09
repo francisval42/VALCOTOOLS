@@ -4,6 +4,7 @@ import { LoanCalculatorTab } from "./tabs/LoanCalculatorTab";
 import { PrivateSaleInvoiceTab } from "./tabs/PrivateSaleInvoiceTab";
 import { ValcoInvoiceTab } from "./tabs/ValcoInvoiceTab";
 import { DealershipInvoiceRequestTab } from "./tabs/DealershipInvoiceRequestTab";
+import { ComplianceAssistantTab } from "./tabs/ComplianceAssistantTab";
 import { Toaster } from "@/components/ui/toaster";
 import { Construction } from "lucide-react";
 
@@ -31,6 +32,7 @@ function App() {
         {activeTab === "valco-invoice" && <ValcoInvoiceTab />}
         {activeTab === "private-sale" && <PrivateSaleInvoiceTab />}
         {activeTab === "dealership-request" && <DealershipInvoiceRequestTab />}
+        {activeTab === "compliance-assistant" && <ComplianceAssistantTab />}
         {activeTab === "tool-4" && <PlaceholderTab title="Settings" />}
       </SidebarLayout>
       <Toaster />

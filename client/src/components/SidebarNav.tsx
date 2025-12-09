@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { FileText, Car, ShoppingBag, Settings, Calculator } from "lucide-react";
+import { FileText, Car, ShoppingBag, Settings, Calculator, Shield } from "lucide-react";
 
 type NavItem = {
   id: string;
@@ -13,6 +13,7 @@ const ITEMS: NavItem[] = [
   { id: "valco-invoice", label: "Valco Invoice Generator", icon: FileText },
   { id: "private-sale", label: "Private Sale Invoice", icon: ShoppingBag },
   { id: "dealership-request", label: "Dealership Invoice Request", icon: Car },
+  { id: "compliance-assistant", label: "Compliance Assistant", icon: Shield },
   { id: "tool-4", label: "Settings", icon: Settings },
 ];
 
