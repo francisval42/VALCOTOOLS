@@ -1,0 +1,901 @@
+You are a Replit Agent. Build a new web app called **Valco Document Studio**.
+
+Tab 1 (to fully implement now) is the **Valco Invoice Generator** for Valco Group issuing invoices to external parties. The other 3 tabs are placeholders in the left menu for future tools.
+
+Styling note: there is an existing Valco Document Normaliser app with a clean, card based UI and a left hand layout. Match that general feel (rounded cards, subtle shadows, generous spacing), but lean more into the Valco brand colours and some complementary neutrals so this app feels like a sibling, not a clone.
+
+Everything below is the detailed build specification. Follow it carefully.
+
+======================================================================
+0. Tech stack and project layout
+======================================================================
+
+Use:
+
+- Vite + React + TypeScript
+- Tailwind CSS for styling
+- pdf-lib for PDF generation
+
+No backend server is required. All state and persistence should be handled in the browser.
+
+Project structure (suggested):
+
+- `index.html`
+- `vite.config.ts`
+- `tailwind.config.cjs`
+- `postcss.config.cjs`
+- `src/`
+  - `main.tsx`
+  - `App.tsx`
+  - `layout/SidebarLayout.tsx`
+  - `components/SidebarNav.tsx`
+  - `tabs/ValcoInvoiceTab.tsx`
+  - `components/InvoiceForm.tsx`
+  - `components/LineItemsTable.tsx`
+  - `components/RecentInvoicesPanel.tsx`
+  - `lib/types.ts`
+  - `lib/money.ts`
+  - `lib/dates.ts`
+  - `lib/storage/suppliers.ts`
+  - `lib/storage/invoices.ts`
+  - `lib/storage/invoiceNumber.ts`
+  - `lib/pdf/taxInvoicePdf.ts`
+  - `brand/colors.ts`
+- `public/`
+  - `valco-letterhead.pdf`  (the user will upload the same letterhead PDF you saw earlier with logo at top and company block at bottom)
+
+You may adjust filenames slightly as long as concerns remain separated: layout, components, lib helpers, storage, PDF generation.
+
+======================================================================
+1. Branding and layout
+======================================================================
+
+Brand colours:
+
+- Navy: `#1f2a44`
+- Orange: `#fe6900`
+- Use soft neutrals for backgrounds, for example Tailwind `slate` or `zinc` shades.
+
+Fonts:
+
+- Use **Poppins** across the app. Load it via Google Fonts in `index.html`, and set Tailwind base font to Poppins.
+
+Overall layout:
+
+- Full height app with:
+  - Left sidebar (fixed width, navy background)
+  - Right main panel for the active tool
+
+Sidebar:
+
+- Background: navy
+- Items: simple vertical nav with 4 items:
+  1. Valco Invoice Generator (active)
+  2. Private Sale Invoice (placeholder)
+  3. Dealership Invoice Request (placeholder)
+  4. Tool 4 (placeholder)
+- Use orange accent for the active item:
+  - A thin orange bar on the left
+  - Slightly lighter navy background on hover and active
+
+Main content area:
+
+- Background: very light grey or off white
+- Use cards with white background, rounded corners, and soft shadow
+- Accent headings and buttons with orange and navy
+
+Take inspiration from the existing Document Normaliser app: the central content should sit in a large card, with secondary cards for side panels.
+
+======================================================================
+2. Core data types
+======================================================================
+
+Create `src/lib/types.ts` and declare:
+
+```ts
+export type InvoiceParty = {
+  businessName: string;
+  abn?: string;
+};
+
+export type InvoiceLineItem = {
+  id: string;
+  description: string;
+  amountIncGst: number; // user entered amount, always treated as the payable amount
+};
+
+export type TaxInvoiceMode = "GST_INC" | "NO_GST";
+
+export type TaxInvoice = {
+  id: string;                // internal id for history
+  invoiceNumber: string;
+  invoiceDate: string;       // ISO YYYY-MM-DD
+  dueDate: string;           // ISO YYYY-MM-DD
+  reference?: string;
+
+  mode: TaxInvoiceMode;      // "GST_INC" or "NO_GST"
+
+  supplier: InvoiceParty;    // Valco - mostly static
+  recipient: InvoiceParty;   // Invoice To
+
+  lineItems: InvoiceLineItem[];
+
+  subtotalExGst: number;
+  gstTotal: number;
+  totalIncGst: number;
+
+  includePaymentDetails: boolean;
+};
+Supplier will always be Valco for this tab, but keep the field for clarity and future extension.
+
+======================================================================
+3. Local storage helpers
+Use localStorage to persist:
+
+Saved suppliers
+
+Last invoice number used
+
+Recent invoices (max 5)
+
+All helpers should be defensive about JSON parse errors.
+
+3.1 Suppliers - lib/storage/suppliers.ts
+LocalStorage key: "valco_suppliers_v1"
+
+Type:
+
+ts
+Copy code
+export type SavedSupplier = {
+  id: string;          // generated with something simple like Date.now + random
+  businessName: string;
+  abn?: string;
+};
+
+type SuppliersState = SavedSupplier[];
+Functions:
+
+getSuppliers(): SuppliersState
+
+Reads from localStorage, returns empty array on error or missing.
+
+saveSuppliers(list: SuppliersState): void
+
+addOrUpdateSupplier(s: SavedSupplier): SuppliersState
+
+If a supplier with same id exists, replace it.
+
+Else append.
+
+deleteSupplier(id: string): SuppliersState
+
+No dummy suppliers should be seeded. The list starts empty.
+
+3.2 Invoice number tracking - lib/storage/invoiceNumber.ts
+LocalStorage key: "valco_invoice_last_number"
+
+Number format is 2025-xxxxx where the numeric portion increments by one.
+
+Seed starting point: 2025-04564.
+
+Provide:
+
+ts
+Copy code
+export function getNextInvoiceNumber(): string;
+export function commitInvoiceNumber(invoiceNumber: string): void;
+Logic for getNextInvoiceNumber:
+
+Read localStorage.
+
+If no last number is stored:
+
+Return "2025-04564" but do not write yet.
+
+If a string exists:
+
+Parse with regex /^(\d{4})-(\d+)$/.
+
+Keep the first group (year) unchanged.
+
+Increment the numeric part by one.
+
+Format back as year-newNumber (preserve zero padding of the original numeric segment).
+
+Return that as the suggestion.
+
+commitInvoiceNumber updates localStorage with the final invoice number after a PDF has been generated successfully.
+
+3.3 Recent invoices - lib/storage/invoices.ts
+LocalStorage key: "valco_recent_invoices_v1"
+
+Store an array of TaxInvoice objects.
+
+Functions:
+
+getRecentInvoices(): TaxInvoice[]
+
+addRecentInvoice(inv: TaxInvoice): TaxInvoice[]
+
+Prepend new invoice
+
+Remove any existing invoice with the same id
+
+Truncate array to length 5
+
+Save back to localStorage
+
+Return updated array
+
+clearRecentInvoices(): void
+
+======================================================================
+4. Money and date helpers
+Create lib/money.ts:
+
+ts
+Copy code
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function calculateTotals(
+  items: InvoiceLineItem[],
+  mode: TaxInvoiceMode
+): { subtotalExGst: number; gstTotal: number; totalIncGst: number } {
+  let subtotalEx = 0;
+  let gst = 0;
+  let totalInc = 0;
+
+  for (const item of items) {
+    const inc = Number.isFinite(item.amountIncGst) ? item.amountIncGst : 0;
+    if (mode === "GST_INC") {
+      const ex = inc / 1.1;
+      const lineGst = inc - ex;
+      subtotalEx += ex;
+      gst += lineGst;
+      totalInc += inc;
+    } else {
+      // NO_GST mode
+      subtotalEx += inc;
+      totalInc += inc;
+    }
+  }
+
+  subtotalEx = round2(subtotalEx);
+  gst = round2(gst);
+  totalInc = round2(totalInc);
+
+  return { subtotalExGst: subtotalEx, gstTotal: gst, totalIncGst: totalInc };
+}
+Create lib/dates.ts:
+
+todayIso(): string - returns current date in YYYY-MM-DD based on local time.
+
+addDays(dateIso: string, days: number): string - adds days, returns ISO.
+
+formatDisplay(dateIso: string): string - returns DD/MM/YYYY.
+
+======================================================================
+5. App layout and navigation
+App.tsx:
+
+Wrap the whole app in SidebarLayout.
+
+Keep active tab in state (simple useState is fine).
+
+Sidebar items:
+
+Valco Invoice Generator
+
+Private Sale Invoice
+
+Dealership Invoice Request
+
+Tool 4
+
+When clicking an item:
+
+Set active tab.
+
+Render ValcoInvoiceTab only for the first item.
+
+For the other three, render simple placeholders:
+
+Title: "Coming soon"
+
+Short explanation text.
+
+SidebarLayout.tsx:
+
+Left column:
+
+Fixed width (~260 px).
+
+Background: navy.
+
+Valco logo at the top (you can render it as simple text "VALCO GROUP" if you do not have the PNG here).
+
+Navigation items in vertical stack.
+
+Main column:
+
+Flex column hosting the active tab.
+
+Background: light neutral.
+
+SidebarNav.tsx:
+
+Renders each nav item as a button.
+
+Active item:
+
+Navy text on a lighter navy background.
+
+Thin orange bar on left edge.
+
+Inactive item:
+
+Muted navy text on transparent or subtle background.
+
+On hover, lighten background slightly.
+
+======================================================================
+6. ValcoInvoiceTab – main invoice builder
+ValcoInvoiceTab.tsx will orchestrate the state for the invoice form, line items, GST mode, and recent invoices.
+
+State:
+
+supplierList: SavedSupplier[] (loaded from storage)
+
+recentInvoices: TaxInvoice[] (loaded from storage)
+
+currentInvoice:
+
+invoiceNumber (string)
+
+invoiceDate (ISO)
+
+dueDate (ISO)
+
+reference (string)
+
+recipient: InvoiceParty
+
+gstMode: TaxInvoiceMode ("GST_INC" by default)
+
+includePaymentDetails: boolean (true by default)
+
+lineItems: InvoiceLineItem[]
+
+Also keep some UI helper state:
+
+selectedSupplierId or "new"
+
+On mount:
+
+Load suppliers and recentInvoices from storage.
+
+Call getNextInvoiceNumber() to seed invoiceNumber.
+
+Seed invoiceDate and dueDate.
+
+Layout inside this tab:
+
+A large card for the form and line items.
+
+A narrower card on the right for Recent Invoices.
+
+A bottom bar with Generate PDF and Reset invoice buttons.
+
+======================================================================
+7. InvoiceForm component
+InvoiceForm.tsx props:
+
+Current invoice metadata and recipient
+
+gstMode
+
+includePaymentDetails
+
+Supplier list and selected supplier
+
+Callbacks for:
+
+Changing fields
+
+Selecting supplier
+
+Saving supplier
+
+Toggling GST
+
+Toggling payment details
+
+Fields:
+
+Heading area:
+
+"Valco Invoice Generator"
+
+Small description: "Create GST inclusive invoices on Valco letterhead."
+
+Invoice To section:
+
+Dropdown: "Saved supplier" with:
+
+Option value "new" - label: "New supplier"
+
+Then one option per saved supplier: label is business name.
+
+Text inputs:
+
+Business Name (required)
+
+ABN (optional)
+
+Behavior:
+
+When you choose "new":
+
+Clear business name and ABN fields.
+
+When you choose an existing supplier:
+
+Fill business name and ABN from that supplier.
+
+Fields remain editable for the current invoice.
+
+Button: "Save supplier"
+
+Disabled if business name is empty.
+
+On click:
+
+If a supplier with selected id exists, update its fields.
+
+Else create a new supplier with new id.
+
+Save via addOrUpdateSupplier.
+
+Update dropdown list.
+
+Show a small inline confirmation message.
+
+Invoice details:
+
+Invoice number (text input)
+
+Invoice date (type date, default today)
+
+Due date (type date, default invoice date + 7 days)
+
+Reference (optional text input)
+
+When invoice date changes and user has not touched due date manually, recalc due date to invoiceDate + 7.
+
+GST and payment options:
+
+Checkbox: [x] GST Inc (amounts entered include 10 percent GST)
+
+When checked: gstMode = "GST_INC"
+
+When unchecked: gstMode = "NO_GST"
+
+Small helper text under it describing behaviour as per earlier spec.
+
+Checkbox: [x] Include Valco account details on invoice
+
+Bound to includePaymentDetails.
+
+Styling:
+
+Use card with subtle border.
+
+Labels in small caps or uppercase navy text.
+
+Inputs with rounded borders and clear focus ring using orange.
+
+======================================================================
+8. LineItemsTable component
+LineItemsTable.tsx props:
+
+lineItems: InvoiceLineItem[]
+
+gstMode: TaxInvoiceMode
+
+callbacks onChangeItem, onAddItem, onRemoveItem
+
+Display:
+
+Table or stacked layout with columns:
+
+Description
+
+Amount (inc GST)
+
+Delete icon
+
+Functionality:
+
++ Add line item adds a new item with:
+
+New id
+
+Blank description
+
+Amount 0
+
+For each row:
+
+Text input for description.
+
+Number input for amount (step 0.01).
+
+Trash icon button to remove row.
+
+Below the table:
+
+Totals summary using calculateTotals:
+
+Show:
+
+Subtotal (ex GST): $X,XXX.XX
+
+If gstMode === "GST_INC" then show:
+
+GST (10%): $XXX.XX
+
+TOTAL (inc GST): $X,XXX.XX in bold orange.
+
+Styling:
+
+Card like the form, but use a stronger navy header row for column headings.
+
+Use subtle alternating row background or border lines to keep numbers clear.
+
+======================================================================
+9. RecentInvoicesPanel component
+RecentInvoicesPanel.tsx props:
+
+recentInvoices: TaxInvoice[]
+
+callback onLoadInvoice(inv: TaxInvoice)
+
+callback onClear()
+
+UI:
+
+Panel title: "Recent invoices"
+
+If empty: show "No invoices yet" with muted text.
+
+Else list each invoice with:
+
+Invoice number
+
+Date (formatted)
+
+Invoice To business name
+
+Total amount inc GST
+
+Small "Load" button
+
+When "Load" is clicked:
+
+Call onLoadInvoice with that invoice object.
+
+The parent tab sets currentInvoice state to that invoice's data (including line items, mode, includePaymentDetails).
+
+Do not auto increment invoice number when simply loading.
+
+Add a "Clear" link or button at bottom that calls clearRecentInvoices.
+
+======================================================================
+10. Generate PDF - taxInvoicePdf.ts
+Implement a function:
+
+ts
+Copy code
+export async function generateTaxInvoicePdf(inv: TaxInvoice): Promise<Uint8Array>
+Steps:
+
+Load /valco-letterhead.pdf with fetch and PDFDocument.load.
+
+Create a new PDFDocument.
+
+Copy the first page of the letterhead into the new document.
+
+ts
+Copy code
+const [templatePage] = await pdfDoc.copyPages(letterheadDoc, [0]);
+pdfDoc.addPage(templatePage);
+const page = pdfDoc.getPage(0);
+Determine page dimensions and margins:
+
+const { width, height } = page.getSize();
+
+For example:
+
+const marginX = 60;
+
+const marginTop = height - 150; // start text 150 points from top
+
+const marginBottom = 80;
+
+Adjust by eyeballing so dynamic content fits between logo and footer.
+
+Fonts and colours:
+
+Use pdfDoc.embedFont(StandardFonts.Helvetica) and StandardFonts.HelveticaBold.
+
+Define RGB for brand colours:
+
+Navy: (31/255, 42/255, 68/255)
+
+Orange: (254/255, 105/255, 0/255)
+
+Draw title:
+
+TAX INVOICE if inv.mode === "GST_INC".
+
+INVOICE if inv.mode === "NO_GST".
+
+Left aligned at (marginX, marginTop).
+
+Font: bold, size ~18, navy.
+
+Supplier block (Valco) just below title:
+
+Text block (Helvetica, size ~10):
+
+yaml
+Copy code
+VALCO GROUP PTY LTD
+ABN 96 648 565 226
+510 / 89 - 93 High St, Kew VIC 3101
+03 8456 9966
+accounts@vgfs.com.au
+Invoice To block:
+
+Draw with heading INVOICE TO: then:
+
+php-template
+Copy code
+<Business Name>
+ABN: <ABN if present>
+Position it to the right of supplier block or directly beneath, depending on available width. You can use two vertical columns.
+
+Metadata block:
+
+Simple key/value layout, for example:
+
+Left column:
+
+Invoice Number: XXXX
+
+Invoice Date: DD/MM/YYYY
+
+Right column:
+
+Due Date: DD/MM/YYYY
+
+Reference: value or "N/A"
+
+Line items table:
+
+Below metadata, draw headings:
+
+Description
+
+Amount inc GST
+
+If GST_INC: Ex GST and GST might be separated if you wish, but at minimum show inc GST column.
+
+Since we already show GST in totals, keep the table simple:
+
+Columns:
+
+Description
+
+Amount (inc GST)
+
+For each line:
+
+Draw description text left aligned.
+
+Draw amount (with currency symbol) right aligned in its column.
+
+Use horizontal rules to separate header and last line.
+
+Totals block:
+
+Use calculateTotals again to ensure consistency, or rely on values on the TaxInvoice object.
+
+Right aligned, something like:
+
+If GST_INC:
+
+nginx
+Copy code
+Subtotal (ex GST):   $X,XXX.XX
+GST (10%):           $XXX.XX
+TOTAL (inc GST):     $X,XXX.XX
+Make the TOTAL amount bold and in orange.
+
+If NO_GST:
+
+Omit the GST line.
+
+Show:
+
+bash
+Copy code
+Subtotal:            $X,XXX.XX
+TOTAL:               $X,XXX.XX
+Payment details block:
+
+Only if inv.includePaymentDetails is true.
+
+Draw a heading in navy: VALCO ACCOUNT DETAILS.
+
+Under it:
+
+vbnet
+Copy code
+BSB: 063185    Account: 11374231
+Bank: CBA
+Account Name: VALCO GROUP FINANCIAL SERVICES
+Place this block near the bottom left, above the footer region.
+
+Save PDF:
+
+const pdfBytes = await pdfDoc.save();
+
+Return the Uint8Array.
+
+In the tab, when the Generate button is clicked and validation passes:
+
+Call generateTaxInvoicePdf(inv).
+
+Create Blob and trigger download:
+
+Filename suggestion: ${inv.invoiceNumber} - ${inv.recipient.businessName || "Invoice"}.pdf
+
+Sanitize to remove invalid characters.
+
+After successful generation:
+
+commitInvoiceNumber(inv.invoiceNumber)
+
+addRecentInvoice(inv) and update state.
+
+======================================================================
+11. Validation and reset behaviour
+Before generating an invoice:
+
+Required:
+
+Recipient business name must not be empty.
+
+At least one line item with amountIncGst > 0.
+
+If validation fails:
+
+Show inline error messaging at top of form and highlight affected fields.
+
+Reset button:
+
+Label: "Reset invoice".
+
+On click, confirm with window.confirm:
+
+"Clear current invoice form? Saved suppliers and recent invoices will stay."
+
+If confirmed, reset:
+
+Recipient to "New supplier", empty fields.
+
+Invoice number to getNextInvoiceNumber().
+
+Invoice date to today.
+
+Due date to invoice date + 7 days.
+
+Reference empty.
+
+GST mode: "GST_INC".
+
+Include payment details: true.
+
+Line items: one blank row or an empty list.
+
+Do not clear suppliers or recent invoices.
+
+======================================================================
+12. Styling guidance and polish
+Match the feel of the existing Valco Document Normaliser app:
+
+Large central card with subtle glassy feel:
+
+Use white or very light background with shadow-md and rounded-2xl.
+
+Use Poppins with consistent sizing:
+
+Title: text-2xl font-semibold
+
+Section headings: text-sm font-semibold uppercase tracking-wide text-slate-500
+
+Inputs: text-sm
+
+Use navy for primary text and headings, orange for key accents:
+
+Primary buttons: orange background, white text, rounded, with hover darkening.
+
+Secondary buttons: navy outline or subtle navy text.
+
+Use a light grey background behind sidebar and cards to keep contrast gentle.
+
+Make sure the app looks cohesive: sidebar, cards, and buttons should all feel like part of the same Valco design system.
+
+======================================================================
+13. QA checklist
+Before you finish, manually verify:
+
+Loading the app shows:
+
+Sidebar with 4 tools.
+
+Valco Invoice Generator is active.
+
+Invoice number defaults to 2025-04564.
+
+GST Inc is checked.
+
+Payment details checkbox is checked.
+
+Creating a new supplier, saving, refreshing:
+
+Supplier appears in the dropdown and can be selected.
+
+Entering a line item with amount 110.00 and GST Inc checked:
+
+Subtotal ex GST is about 100.00.
+
+GST is about 10.00.
+
+Total is 110.00.
+
+Unchecking GST Inc:
+
+GST line disappears, totals treat 110.00 as Subtotal and Total.
+
+Generate PDF shows title "INVOICE" not "TAX INVOICE".
+
+With GST Inc checked:
+
+Generate PDF:
+
+Title "TAX INVOICE".
+
+Letterhead is used (logo and footer visible).
+
+No text overlaps header or footer.
+
+Totals and payment details are shown correctly.
+
+Recent invoices:
+
+After creating a few, panel shows list.
+
+Loading an invoice repopulates the form and line items.
+
+Invoice numbering:
+
+After generating a first invoice with default 2025-04564 and committing:
+
+Next Reset gives default 2025-04565, etc.
+
+If all of the above pass and there are no TypeScript or runtime errors, the implementation is complete for Tab 1. The other three tabs can remain as coming soon placeholders.
