@@ -160,7 +160,7 @@ export function InvoiceForm({
                     id="business-name" 
                     value={recipient.businessName} 
                     onChange={(e) => onUpdateField("recipient", { ...recipient, businessName: e.target.value })}
-                    placeholder="e.g. Acme Corp Pty Ltd"
+                    placeholder="e.g. Frankie's Hot Dogs Pty Ltd"
                     className="focus-visible:ring-primary"
                   />
                 </div>
