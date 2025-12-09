@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SidebarLayout } from "./layout/SidebarLayout";
+import { LoanCalculatorTab } from "./tabs/LoanCalculatorTab";
 import { PrivateSaleInvoiceTab } from "./tabs/PrivateSaleInvoiceTab";
 import { ValcoInvoiceTab } from "./tabs/ValcoInvoiceTab";
 import { DealershipInvoiceRequestTab } from "./tabs/DealershipInvoiceRequestTab";
@@ -21,11 +22,12 @@ function PlaceholderTab({ title }: { title: string }) {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState("valco-invoice");
+  const [activeTab, setActiveTab] = useState("loan-calculator");
 
   return (
     <>
       <SidebarLayout activeTab={activeTab} onTabChange={setActiveTab}>
+        {activeTab === "loan-calculator" && <LoanCalculatorTab />}
         {activeTab === "valco-invoice" && <ValcoInvoiceTab />}
         {activeTab === "private-sale" && <PrivateSaleInvoiceTab />}
         {activeTab === "dealership-request" && <DealershipInvoiceRequestTab />}

@@ -1,0 +1,561 @@
+You are a Replit Agent. Extend the existing **Valco Document Studio** app by adding a new tool: **Loan Calculator**.
+
+The app currently has tabs for:
+
+- Valco Invoice Generator
+- Private Sale Invoice
+- Dealership Invoice Request
+- Tool 4 (placeholder)
+
+You must add a **Loan Calculator tab**, and keep styling, structure, and UX consistent with the rest of the studio.
+
+======================================================================
+0. Tech stack and conventions
+======================================================================
+
+Use the same stack and conventions as the existing app:
+
+- React + TypeScript + Vite
+- Tailwind CSS for styling
+- Poppins as the font
+- Brand colours:
+  - Navy: `#1f2a44`
+  - Orange: `#fe6900`
+  - Light greys for background
+
+No backend is required. All logic is client side.
+
+Directory structure:
+
+- `src/tabs/LoanCalculatorTab.tsx`
+- `src/lib/loanCalc/types.ts`
+- `src/lib/loanCalc/pdf.ts`
+- Reuse existing:
+  - `src/lib/money.ts` for rounding
+  - `src/lib/dates.ts` for date formatting
+
+======================================================================
+1. Navigation – add Loan Calculator tab
+======================================================================
+
+Update the left sidebar navigation to include a **Loan Calculator** tab.
+
+Recommended order:
+
+1. Loan Calculator (new Tab 0)
+2. Valco Invoice Generator
+3. Private Sale Invoice
+4. Dealership Invoice Request
+5. Tool 4 (placeholder)
+
+When the user clicks **Loan Calculator**:
+
+- Render `LoanCalculatorTab`.
+- Visually highlight it the same way as other active tabs:
+  - Slightly lighter navy background
+  - Thin orange bar on the left
+  - White or near white text
+
+Do not break existing tabs.
+
+======================================================================
+2. Data model for the calculator
+======================================================================
+
+Create `src/lib/loanCalc/types.ts`:
+
+```ts
+export type LoanCalcForm = {
+  // Deal inputs
+  vehiclePrice: number;      // required
+  deposit: number;           // optional
+  tradeIn: number;           // optional
+  payout: number;            // optional
+
+  // Loan settings
+  termMonths: number;        // required, default 60
+  annualRate: number;        // required, default 12.95 (percent p.a.)
+  balloonAmount: number;     // optional, can be zero
+  balloonPercent: number;    // optional, auto derived from amount
+  monthlyFee: number;        // optional, monthly account keeping fee
+
+  // Outputs (computed)
+  amountFinanced: number;
+  monthlyRepayment: number;
+  fortnightlyRepayment: number;
+  weeklyRepayment: number;
+};
+All numeric fields should be stored as numbers. Blank inputs are treated as 0 for optional fields.
+
+======================================================================
+3. LoanCalculatorTab – layout
+LoanCalculatorTab.tsx should use the same overall container styling as other tabs:
+
+Outer container: max-w-5xl mx-auto py-8 px-4
+
+Main card: bg-white rounded-2xl shadow-md p-6 md:p-8 space-y-6
+
+Inside the card, layout sections:
+
+Heading and short description
+
+Section A – Deal inputs
+
+Section B – Loan settings
+
+Section C – Repayments summary
+
+Section D – Export to PDF (at the bottom)
+
+3.1 Heading
+At the top of the card:
+
+Title: Loan Calculator (Poppins, text-2xl font-semibold text-slate-900)
+
+Subheading: Quick internal calculator for repayments on a vehicle loan. (text-sm text-slate-500)
+
+3.2 Section A – Deal inputs
+Use a titled subsection:
+
+Subheading: Deal inputs
+
+Fields:
+
+Vehicle price (vehiclePrice)
+
+Required numeric input, step 0.01.
+
+Deposit (deposit)
+
+Optional numeric field.
+
+Trade in (tradeIn)
+
+Optional numeric field.
+
+Payout (payout)
+
+Optional numeric field.
+
+Behaviour:
+
+Treat blank optional fields as 0 when calculating.
+
+Display a note: Amount financed = Price − Deposit − Trade in + Payout.
+
+Amount financed:
+
+Compute:
+
+ts
+Copy code
+const financed = vehiclePrice - deposit - tradeIn + payout;
+Show a read only text line under the inputs:
+
+Label: Amount financed:
+
+Value: $X,XXX.XX using rounding helper.
+
+3.3 Section B – Loan settings
+Subheading: Loan settings
+
+Fields:
+
+Term (months) (termMonths)
+
+Required integer input.
+
+Default value: 60.
+
+Allow any integer from 1 up to 999.
+
+Interest rate p.a. (%) (annualRate)
+
+Required numeric input.
+
+Default value: 12.95.
+
+Valid range: 0.00 to 99.99.
+
+Balloon amount (balloonAmount)
+
+Numeric input.
+
+Optional. Default 0.
+
+Balloon percent (balloonPercent)
+
+Numeric input (percentage).
+
+Optional. Default 0.
+
+Monthly account keeping fee (monthlyFee)
+
+Numeric input, step 0.01.
+
+Optional. Default 0.
+
+Balloon amount and percent must stay in sync:
+
+When user changes balloonAmount:
+
+If vehiclePrice > 0:
+
+balloonPercent = (balloonAmount / vehiclePrice) * 100.
+
+If vehiclePrice <= 0, keep percent at 0.
+
+When user changes balloonPercent:
+
+balloonAmount = vehiclePrice * (balloonPercent / 100).
+
+Use a small caption under these fields:
+
+Balloon can be entered as an amount or a percent of vehicle price. Changing one updates the other.
+
+3.4 Section C – Repayments summary
+Subheading: Repayments
+
+Output fields (read only):
+
+Monthly repayment
+
+Fortnightly repayment
+
+Weekly repayment
+
+Use a simple card like:
+
+Monthly: $X,XXX.XX (larger text, navy)
+
+Fortnightly: $X,XXX.XX
+
+Weekly: $X,XXX.XX
+
+Arrange in a 1x3 grid on desktop, stacked on mobile.
+
+Do not show total interest or fee totals; this tool is for internal quick use only.
+
+======================================================================
+4. Repayment calculation logic
+All calculations should update live as inputs change, after basic validation.
+
+Definitions:
+
+Principal P = amount financed = vehiclePrice - deposit - tradeIn + payout.
+
+Term in months n = termMonths.
+
+Annual interest rate annualRate in percent.
+
+Monthly rate r:
+
+ts
+Copy code
+const r = annualRate / 100 / 12;
+Balloon amount R = balloonAmount.
+
+4.1 Normal case – r > 0
+Use standard annuity with residual:
+
+Formula for the principal and interest component of the monthly repayment:
+
+text
+Copy code
+effectivePrincipal = P - R / (1 + r)^n
+
+monthlyPrincipalInterest =
+  effectivePrincipal * [ r / (1 - (1 + r)^(-n)) ]
+If n <= 0 or P <= 0:
+
+Treat repayment as 0 and do not attempt calculation.
+
+4.2 Zero interest case – r == 0
+If annualRate is 0 or extremely close to 0 (for example absolute value < 1e-8):
+
+Then the principal over term is:
+
+ts
+Copy code
+monthlyPrincipalInterest = (P - R) / n;
+If (P - R) <= 0 or n <= 0, repayment is 0.
+
+4.3 Monthly fee and derived repayments
+Monthly repayment:
+
+ts
+Copy code
+monthlyRepayment = monthlyPrincipalInterest + monthlyFee;
+Fortnightly repayment:
+
+ts
+Copy code
+fortnightlyRepayment = monthlyRepayment * 12 / 26;
+Weekly repayment:
+
+ts
+Copy code
+weeklyRepayment = monthlyRepayment * 12 / 52;
+Round each displayed repayment to two decimal places with an existing round2 helper:
+
+ts
+Copy code
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+Do not show negatives. If the computed repayment is negative or NaN due to bizarre inputs, clamp to 0.
+
+======================================================================
+5. Validation and form behaviour
+No traffic light system. Use simple inline validation and a small banner when needed.
+
+Basic rules:
+
+vehiclePrice must be > 0.
+
+termMonths must be > 0.
+
+annualRate must be between 0 and 99.99.
+
+Optional numeric fields:
+
+If blank, treat as 0.
+
+If invalid, show an error and ignore.
+
+Validation:
+
+For normal live updates, do not block calculation when fields are partially filled; just handle blanks as 0 and clamp as needed.
+
+For PDF export, validate the key required fields (vehiclePrice, termMonths, annualRate) and block export if invalid.
+
+Error UI for invalid export:
+
+Above the export button, show a small banner:
+
+For example: “Please check vehicle price, term and interest rate before exporting.”
+
+Highlight only the invalid fields with red border and message where needed.
+
+======================================================================
+6. Export as PDF
+At the bottom of the Loan Calculator card add:
+
+Label: Client name or quote reference (optional)
+
+Text input: clientOrRef
+
+Button: Download quote PDF
+
+When clicked:
+
+Validate required fields for loan calculation:
+
+vehiclePrice > 0
+
+termMonths > 0
+
+annualRate in 0 to 99.99
+
+If invalid:
+
+Prevent export.
+
+Show small error message near bottom and highlight invalid inputs.
+
+If valid:
+
+Recalculate repayments and amount financed if needed.
+
+Generate PDF and trigger download.
+
+6.1 File naming logic
+Two cases:
+
+Client name / reference is empty (or whitespace only)
+
+Filename pattern:
+Quote - <YYYY-MM-DD> - <index>.pdf
+
+<YYYY-MM-DD> is today’s date in ISO format.
+
+<index> is a three digit counter for that day (001, 002, 003, ...).
+
+Client name / reference is provided
+
+Clean the input (trim and replace invalid filename characters /\:*?"<>| with space or dash).
+
+Filename pattern:
+<ClientOrRef> - Quote - <YYYY-MM-DD> - <index>.pdf
+
+Same date and index rules as above.
+
+Index behaviour:
+
+Use localStorage with key like:
+"loan_calc_quote_counter_<YYYY-MM-DD>".
+
+Read it on export:
+
+If missing: start at 1.
+
+If present: parse and increment.
+
+Use that number for <index>, padded with padStart(3, "0").
+
+Update localStorage after each export.
+
+Examples:
+
+No name, first export 2025-12-09:
+Quote - 2025-12-09 - 001.pdf
+
+Name “Fadia Hassan”, second export that day:
+Fadia Hassan - Quote - 2025-12-09 - 002.pdf
+
+6.2 PDF content
+Create generateLoanQuotePdf(form: LoanCalcForm, clientOrRef: string): Promise<Uint8Array> in src/lib/loanCalc/pdf.ts.
+
+It can be a simple A4 single page using a clean layout, no letterhead is strictly required, but you may reuse the Valco letterhead if you want visual consistency.
+
+Suggested structure:
+
+Heading: Loan quote (large)
+
+Subheading: Client / Reference: [clientOrRef or ""]
+
+Section 1: Deal inputs
+
+Vehicle price
+
+Deposit
+
+Trade in
+
+Payout
+
+Amount financed
+
+Section 2: Loan settings
+
+Term in months
+
+Interest rate p.a.
+
+Balloon amount
+
+Balloon percent
+
+Monthly account keeping fee
+
+Section 3: Repayments
+
+Monthly
+
+Fortnightly
+
+Weekly
+
+Use Helvetica fonts and navy/orange accents similar to other PDFs. Ensure a clean layout with no overlapping content.
+
+======================================================================
+7. Styling and UX details
+Match existing Valco Document Studio UI:
+
+Use Poppins globally.
+
+Cards are white with rounded-2xl and shadow-md.
+
+Headings:
+
+text-xs font-semibold tracking-wide text-slate-500 uppercase for subsection titles.
+
+Buttons:
+
+Primary (Download PDF) – orange background, white text, rounded, small shadow, hover darken.
+
+Disabled state if repayments cannot be calculated or required fields missing.
+
+Keep the calculator fast:
+
+All calculations are live on change.
+
+The UI must feel instant, with no spinners.
+
+======================================================================
+8. QA checklist
+Before finalising, manually verify in the running app:
+
+Navigation:
+
+Loan Calculator appears in the sidebar.
+
+Clicking it switches to the new tool and does not break other tabs.
+
+Basic calculation:
+
+With:
+
+Price: 50,000
+
+Deposit: 5,000
+
+Trade in: 10,000
+
+Payout: 3,000
+
+Term: 60
+
+Rate: 12.95
+
+Balloon amount: 0
+
+Monthly fee: 0
+
+Amount financed: 38,000.
+
+Monthly, fortnightly, weekly repayments are non zero and sensible.
+
+Changing rate or term updates repayments.
+
+Balloon sync:
+
+Setting balloon amount updates balloon percent based on vehicle price.
+
+Setting balloon percent updates balloon amount.
+
+Behaviour is stable when vehicle price is changed.
+
+Export behaviour:
+
+With valid inputs and no name:
+
+Download triggers with filename like:
+
+Quote - 2025-12-09 - 001.pdf.
+
+Next export that day:
+
+Quote - 2025-12-09 - 002.pdf.
+
+With Client / Reference entered:
+
+Fadia Hassan - Quote - 2025-12-09 - 003.pdf.
+
+PDF contents:
+
+Shows headings and all relevant fields.
+
+Repayments match those shown in UI.
+
+No overlaps or layout glitches.
+
+Error cases:
+
+Price 0 or empty prevents PDF generation and shows an error.
+
+Term 0 or empty prevents PDF generation and shows an error.
+
+Rate outside 0 to 99.99 is rejected.
+
+If all checks pass and there are no TypeScript errors or runtime errors, the Loan Calculator tab is successfully implemented and integrated into Valco Document Studio.
