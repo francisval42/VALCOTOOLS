@@ -41,6 +41,7 @@ export type PrivateSaleInvoice = {
   vendor: {
     name: string;
     abn?: string;
+    acn?: string;
     address?: string;
     phone?: string;
     email?: string;

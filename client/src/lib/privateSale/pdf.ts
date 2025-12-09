@@ -51,6 +51,10 @@ export async function generatePrivateSalePdf(invoice: PrivateSaleInvoice): Promi
       drawText(`ABN: ${invoice.vendor.abn}`, 50, y, 10);
       y -= 15;
   }
+  if (invoice.vendor.acn) {
+      drawText(`ACN: ${invoice.vendor.acn}`, 50, y, 10);
+      y -= 15;
+  }
   if (invoice.vendor.address) {
       drawText(invoice.vendor.address, 50, y, 10);
       y -= 15;

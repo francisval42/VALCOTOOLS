@@ -83,6 +83,8 @@ export function PrivateSaleInvoiceTab() {
   
   // Vendor optional fields
   const [vendorAbn, setVendorAbn] = useState("");
+  const [showAcn, setShowAcn] = useState(false);
+  const [vendorAcn, setVendorAcn] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
 
@@ -239,6 +241,7 @@ export function PrivateSaleInvoiceTab() {
             name: fields["vendorName"].value,
             address: fields["vendorAddress"].value,
             abn: vendorAbn,
+            acn: showAcn ? vendorAcn : undefined,
             phone: vendorPhone,
             email: vendorEmail
         },
@@ -294,6 +297,8 @@ export function PrivateSaleInvoiceTab() {
       setInvoiceDate(inv.invoiceDate);
       setGstMode(inv.gstMode);
       setVendorAbn(inv.vendor.abn || "");
+      setVendorAcn(inv.vendor.acn || "");
+      setShowAcn(!!inv.vendor.acn);
       setVendorPhone(inv.vendor.phone || "");
       setVendorEmail(inv.vendor.email || "");
       setDisbursements(inv.disbursements);
@@ -423,6 +428,23 @@ export function PrivateSaleInvoiceTab() {
                         <div className="space-y-2">
                             <Label>Vendor ABN <span className="text-slate-400 font-normal">(Optional)</span></Label>
                             <Input value={vendorAbn} onChange={e => setVendorAbn(e.target.value)} placeholder="XX XXX XXX XXX" />
+                            <div className="flex items-center space-x-2 mt-2">
+                                <Checkbox 
+                                    id="show-acn" 
+                                    checked={showAcn} 
+                                    onCheckedChange={c => setShowAcn(!!c)} 
+                                />
+                                <Label htmlFor="show-acn" className="text-xs text-slate-500 cursor-pointer">Include ACN</Label>
+                            </div>
+                            {showAcn && (
+                                <div className="mt-2">
+                                    <Input 
+                                        value={vendorAcn} 
+                                        onChange={e => setVendorAcn(e.target.value)} 
+                                        placeholder="XXX XXX XXX" 
+                                    />
+                                </div>
+                            )}
                         </div>
                         <TrafficLightInput 
                             label="Vendor Address"
