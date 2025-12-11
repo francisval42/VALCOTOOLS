@@ -40,6 +40,7 @@ export function LoanCalculatorTab() {
   const [balloonPercent, setBalloonPercent] = useState<number>(0);
   const [balloonEditMode, setBalloonEditMode] = useState<'amount' | 'percent' | null>(null);
   const [monthlyFee, setMonthlyFee] = useState<number>(0);
+  const [paymentInAdvance, setPaymentInAdvance] = useState<boolean>(false);
 
   const [clientOrRef, setClientOrRef] = useState("");
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -51,13 +52,13 @@ export function LoanCalculatorTab() {
   );
 
   const repayments = useMemo(() => {
-    const result = calculateRepayments(amountFinanced, termMonths, annualRate, balloonAmount, monthlyFee);
+    const result = calculateRepayments(amountFinanced, termMonths, annualRate, balloonAmount, monthlyFee, paymentInAdvance);
     return {
       monthly: round2(result.monthly),
       fortnightly: round2(result.fortnightly),
       weekly: round2(result.weekly),
     };
-  }, [amountFinanced, termMonths, annualRate, balloonAmount, monthlyFee]);
+  }, [amountFinanced, termMonths, annualRate, balloonAmount, monthlyFee, paymentInAdvance]);
 
   const handleBalloonAmountChange = (value: number) => {
     setBalloonAmount(value);
@@ -123,6 +124,7 @@ export function LoanCalculatorTab() {
       monthlyRepayment: repayments.monthly,
       fortnightlyRepayment: repayments.fortnightly,
       weeklyRepayment: repayments.weekly,
+      paymentInAdvance,
     };
 
     try {
@@ -311,6 +313,19 @@ export function LoanCalculatorTab() {
               </div>
             </div>
             <p className="text-xs text-slate-400 mt-2">Balloon can be entered as an amount or a percent of vehicle price. Changing one updates the other.</p>
+            
+            <div className="mt-4">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={paymentInAdvance}
+                  onChange={e => setPaymentInAdvance(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                  data-testid="checkbox-payment-in-advance"
+                />
+                <span>First repayment in advance (payment on settlement date)</span>
+              </label>
+            </div>
           </div>
 
           <div className="h-px bg-slate-100" />

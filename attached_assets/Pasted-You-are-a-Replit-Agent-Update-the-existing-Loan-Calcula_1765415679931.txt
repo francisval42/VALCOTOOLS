@@ -1,0 +1,277 @@
+You are a Replit Agent. Update the existing **Loan Calculator** tab inside the Valco Document Studio app to support an optional **“payment in advance”** mode.
+
+Currently:
+
+- The calculator assumes **payments in arrears** (first repayment one month after settlement).
+- The monthly repayment maths is already working correctly, including:
+  - with or without a balloon
+  - zero or non-zero fees
+  - term and rate combinations
+- Fortnightly = `monthly * 12 / 26`
+- Weekly = `monthly * 12 / 52`
+
+Your job:
+
+- Add a boolean “payment in advance” option to the UI and logic.
+- Default must remain **arrears** (existing behaviour).
+- When “advance” is selected:
+  - Use the **exact same formula** as now to compute the *arrears* repayment.
+  - Then convert it to an *advance* repayment using:
+
+    ```ts
+    repaymentAdvance = repaymentArrears / (1 + rMonthly);
+    ```
+
+    where `rMonthly = annualRate / 12 / 100`.
+
+- Fortnightly and weekly repayments must be based on the **adjusted** advance monthly amount.
+
+Do NOT change any other behaviours or validation.
+
+======================================================================
+0. Code structure and assumptions
+======================================================================
+
+Assume the Loan Calculator tab was implemented roughly as previously specified:
+
+- Tab component: `src/tabs/LoanCalculatorTab.tsx`
+- Types: `src/lib/loanCalc/types.ts`
+- Helpers: `src/lib/loanCalc/calc.ts` or similar
+- State type `LoanCalcForm` includes:
+  - `vehiclePrice`, `deposit`, `tradeIn`, `payout`
+  - `termMonths`, `annualRate`
+  - `balloonAmount`, `balloonPercent`
+  - `monthlyFee`
+  - `monthlyRepayment`, `fortnightlyRepayment`, `weeklyRepayment` (either stored or derived)
+
+If file names differ, adapt the instructions to the actual files, but keep the logic identical.
+
+======================================================================
+1. Add a “payment in advance” flag to state
+======================================================================
+
+In `src/lib/loanCalc/types.ts`, extend `LoanCalcForm`:
+
+```ts
+export type LoanCalcForm = {
+  // existing fields...
+  vehiclePrice: number;
+  deposit: number;
+  tradeIn: number;
+  payout: number;
+  termMonths: number;
+  annualRate: number;
+  balloonAmount: number;
+  balloonPercent: number;
+  monthlyFee: number;
+
+  // NEW:
+  paymentInAdvance: boolean; // false = arrears (default), true = first repayment on settlement date
+};
+When initialising form state in LoanCalculatorTab.tsx:
+
+Set paymentInAdvance: false by default.
+
+======================================================================
+2. Update the UI – add a checkbox for “advance payments”
+In LoanCalculatorTab.tsx, in the Loan settings section near Term and Rate, add a checkbox:
+
+Label:
+
+“First repayment in advance (payment on settlement date)”
+
+Example JSX (adapt to your layout):
+
+tsx
+Copy code
+<label className="flex items-center gap-2 text-sm text-slate-700">
+  <input
+    type="checkbox"
+    checked={form.paymentInAdvance}
+    onChange={e =>
+      setForm(prev => ({ ...prev, paymentInAdvance: e.target.checked }))
+    }
+  />
+  <span>First repayment in advance (payment on settlement date)</span>
+</label>
+Make sure this control does not change any other state.
+
+======================================================================
+3. Adjust the repayment logic (core maths)
+Find where the calculator currently computes the monthly repayment in arrears.
+
+It will look roughly like:
+
+ts
+Copy code
+const rMonthly = annualRate / 100 / 12;
+const n = termMonths;
+
+let monthlyPrincipalInterest: number;
+
+if (rMonthly > 0) {
+  // Balloon-aware annuity in arrears:
+  const effectivePrincipal =
+    amountFinanced - balloonAmount / Math.pow(1 + rMonthly, n);
+  monthlyPrincipalInterest =
+    effectivePrincipal * (rMonthly / (1 - Math.pow(1 + rMonthly, -n)));
+} else {
+  // Zero-rate case:
+  const principalMinusBalloon = amountFinanced - balloonAmount;
+  monthlyPrincipalInterest = principalMinusBalloon / n;
+}
+
+// Then:
+const monthlyRepayment = monthlyPrincipalInterest + monthlyFee;
+Important: do NOT change this arrears formula. You should only add logic after the existing arrears repayment is computed.
+
+3.1 Add the advance conversion
+Immediately after monthlyRepayment (the arrears figure) is computed, add:
+
+ts
+Copy code
+let adjustedMonthlyRepayment = monthlyRepayment;
+
+if (form.paymentInAdvance) {
+  if (rMonthly > 0) {
+    adjustedMonthlyRepayment = monthlyRepayment / (1 + rMonthly);
+  } else {
+    // rMonthly === 0 → arrears and advance are the same in amount,
+    // only timing differs, so we keep the same repayment.
+    adjustedMonthlyRepayment = monthlyRepayment;
+  }
+}
+Then use adjustedMonthlyRepayment everywhere the monthly repayment is used for display or for calculating fortnightly/weekly.
+
+For example:
+
+ts
+Copy code
+const fortnightlyRepayment = adjustedMonthlyRepayment * 12 / 26;
+const weeklyRepayment = adjustedMonthlyRepayment * 12 / 52;
+Replace any previous usage of monthlyRepayment in the UI and state with adjustedMonthlyRepayment, without altering the original monthlyRepayment arithmetic.
+
+You may choose to:
+
+Keep monthlyRepaymentArrears as an internal variable
+
+Store adjustedMonthlyRepayment as the outward-facing form value
+
+Example:
+
+ts
+Copy code
+const monthlyRepaymentArrears = monthlyPrincipalInterest + monthlyFee;
+
+let monthlyRepaymentDisplay = monthlyRepaymentArrears;
+
+if (form.paymentInAdvance && rMonthly > 0) {
+  monthlyRepaymentDisplay = monthlyRepaymentArrears / (1 + rMonthly);
+}
+
+const fortnightlyRepayment = monthlyRepaymentDisplay * 12 / 26;
+const weeklyRepayment = monthlyRepaymentDisplay * 12 / 52;
+Update any state setters accordingly:
+
+ts
+Copy code
+setForm(prev => ({
+  ...prev,
+  // store only display amounts in state if that is your pattern:
+  monthlyRepayment: monthlyRepaymentDisplay,
+  fortnightlyRepayment,
+  weeklyRepayment,
+}));
+======================================================================
+4. Do NOT change any other logic
+Do not change amount financed formula (Price − Deposit − Trade in + Payout).
+
+Do not change balloon calculation.
+
+Do not touch the PDF export logic except to ensure it uses the new monthlyRepayment value (which now reflects arrears or advance depending on the checkbox).
+
+Do not alter validation rules.
+
+The only new behaviour:
+
+When “First repayment in advance” is unticked (default):
+
+Calculator behaves exactly as it does today (arrears).
+
+When it is ticked:
+
+Monthly repayment is reduced by dividing the arrears repayment by (1 + rMonthly).
+
+Fortnightly and weekly are recalculated from this adjusted monthly amount.
+
+======================================================================
+5. Testing and QA
+Verify with the following scenarios (use simple small numbers to check):
+
+Match Metro arrears vs advance (no balloon)
+
+Amount financed: 40,000
+
+Term: 36 months
+
+Rate: 8 % p.a.
+
+Balloon: 0
+
+Monthly fee: same as currently used for test (or zero if you test isolated P+I).
+
+a. With “Advance” unticked
+
+Monthly repayment should match your existing calculator (and Metro arrears) exactly as before.
+
+b. With “Advance” ticked
+
+Monthly repayment should be ≈ arrears / (1 + 0.08/12).
+
+Using Metro’s values:
+
+Arrears ≈ 1,253.46
+
+Advance ≈ 1,245.16
+
+Match Metro arrears vs advance (with balloon)
+
+Amount financed: 20,000
+
+Term: 60 months
+
+Rate: 8 % p.a.
+
+Balloon: 10,000
+
+a. Arrears unchecked:
+
+Monthly ≈ 269.43 (as your current calculator already produces).
+
+b. Advance checked:
+
+Monthly ≈ 269.43 / (1 + 0.08/12) ≈ 267.65.
+
+Zero-rate edge case
+
+Rate: 0 %
+
+Balloon any
+
+Confirm:
+
+Arrears and advance repayments are identical (only timing changes, amount does not).
+
+No division by zero occurs.
+
+Fortnightly and weekly
+
+In both arrears and advance:
+
+Fortnightly = monthlyDisplay * 12 / 26
+
+Weekly = monthlyDisplay * 12 / 52
+
+Verify they update when toggling the advance flag.
+
+If all tests pass and there are no TypeScript errors or runtime errors, the Loan Calculator will correctly support optional “payments in advance” while preserving the existing arrears behaviour.

@@ -12,6 +12,7 @@ export type LoanCalcForm = {
   monthlyRepayment: number;
   fortnightlyRepayment: number;
   weeklyRepayment: number;
+  paymentInAdvance: boolean;
 };
 
 export function calculateAmountFinanced(
@@ -28,7 +29,8 @@ export function calculateRepayments(
   termMonths: number,
   annualRate: number,
   balloonAmount: number,
-  monthlyFee: number
+  monthlyFee: number,
+  paymentInAdvance: boolean = false
 ): { monthly: number; fortnightly: number; weekly: number } {
   const P = amountFinanced;
   const n = termMonths;
@@ -58,7 +60,13 @@ export function calculateRepayments(
     monthlyPrincipalInterest = effectivePrincipal * (r / (1 - Math.pow(1 + r, -n)));
   }
 
-  const monthlyRepayment = monthlyPrincipalInterest + monthlyFee;
+  const monthlyRepaymentArrears = monthlyPrincipalInterest + monthlyFee;
+  
+  let monthlyRepayment = monthlyRepaymentArrears;
+  if (paymentInAdvance && r > 0) {
+    monthlyRepayment = monthlyRepaymentArrears / (1 + r);
+  }
+  
   const fortnightlyRepayment = (monthlyRepayment * 12) / 26;
   const weeklyRepayment = (monthlyRepayment * 12) / 52;
 
