@@ -65,8 +65,9 @@ export type PrivateSaleInvoice = {
   };
 
   invoiceAmount: number;  // as entered (inc GST or not depending on mode)
+  depositAmount: number;  // deposit already paid (default 0)
   gstAmount: number;      // derived if GST_INC, else 0
-  totalPayable: number;   // equals invoiceAmount
+  totalPayable: number;   // invoiceAmount - depositAmount = total disbursements
 
   disbursements: PrivateSaleDisbursement[];
 

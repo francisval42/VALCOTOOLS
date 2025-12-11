@@ -132,8 +132,8 @@ export async function generatePrivateSalePdf(invoice: PrivateSaleInvoice): Promi
   page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: rgb(0.9, 0.9, 0.9) });
   y -= 30;
 
-  // Invoice Amount
-  drawText("Invoice Amount", 50, y, 11, true);
+  // Purchase Price
+  drawText("Purchase Price", 50, y, 11, true);
   drawRightAligned(formatCurrency(invoice.invoiceAmount), width - 50, y, 11, true);
   y -= 20;
 
@@ -143,9 +143,16 @@ export async function generatePrivateSalePdf(invoice: PrivateSaleInvoice): Promi
       y -= 20;
   }
 
+  // Deposit (if applicable)
+  if (invoice.depositAmount && invoice.depositAmount > 0) {
+      drawText("Less Deposit Paid", 50, y, 11, false);
+      drawRightAligned(`- ${formatCurrency(invoice.depositAmount)}`, width - 50, y, 11, false);
+      y -= 20;
+  }
+
   y -= 10;
-  // Total Payable (Huge)
-  drawText("TOTAL PAYABLE", 50, y, 14, true, navColor);
+  // Total Payable / Total Disbursements
+  drawText("TOTAL DISBURSEMENTS", 50, y, 14, true, navColor);
   drawRightAligned(formatCurrency(invoice.totalPayable), width - 50, y, 14, true, navColor);
   
   y -= 50;

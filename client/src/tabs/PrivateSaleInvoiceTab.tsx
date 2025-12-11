@@ -88,6 +88,9 @@ export function PrivateSaleInvoiceTab() {
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
 
+  // Deposit
+  const [depositAmount, setDepositAmount] = useState<string>("0");
+
   // Disbursements
   const [disbursements, setDisbursements] = useState<PrivateSaleDisbursement[]>([]);
 
@@ -229,7 +232,21 @@ export function PrivateSaleInvoiceTab() {
     }
 
     const invoiceAmt = parseFloat(fields["invoiceAmount"]?.value || "0");
+    const depositAmt = parseFloat(depositAmount || "0");
     const gstAmt = gstMode === "GST_INC" ? invoiceAmt / 11 : 0; // 1/11th is GST
+    const totalPayableAmt = Math.max(0, invoiceAmt - depositAmt); // purchase price minus deposit
+    
+    // Validate disbursements match total payable
+    const disbursementTotal = disbursements.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    if (disbursements.length > 0 && Math.abs(disbursementTotal - totalPayableAmt) > 0.01) {
+        const variance = disbursementTotal - totalPayableAmt;
+        const proceed = confirm(
+            `Disbursements (${formatCurrency(disbursementTotal)}) do not match Total Disbursements (${formatCurrency(totalPayableAmt)}).\n\n` +
+            `Difference: ${variance > 0 ? '+' : ''}${formatCurrency(variance)}\n\n` +
+            `Do you want to generate the invoice anyway?`
+        );
+        if (!proceed) return;
+    }
     
     // Construct Object
     const inv: PrivateSaleInvoice = {
@@ -261,8 +278,9 @@ export function PrivateSaleInvoiceTab() {
             complianceDate: fields["vehicleComplianceDate"].value
         },
         invoiceAmount: invoiceAmt,
+        depositAmount: depositAmt,
         gstAmount: gstAmt,
-        totalPayable: invoiceAmt, // Disbursements included in total or added to it? Spec says "Included in total payable" in pdf text, usually implies Invoice Amount covers it.
+        totalPayable: totalPayableAmt, // purchase price minus deposit = total disbursements
         disbursements,
         includeVendorSignature: includeVendorSig,
         includeBuyerSignature: includeBuyerSig
@@ -302,6 +320,7 @@ export function PrivateSaleInvoiceTab() {
       setVendorPhone(inv.vendor.phone || "");
       setVendorEmail(inv.vendor.email || "");
       setDisbursements(inv.disbursements);
+      setDepositAmount((inv.depositAmount || 0).toString());
       setIncludeVendorSig(inv.includeVendorSignature);
       setIncludeBuyerSig(inv.includeBuyerSignature);
       
@@ -558,10 +577,10 @@ export function PrivateSaleInvoiceTab() {
                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <span className="w-1 h-4 bg-primary rounded-full"/> Pricing & Disbursements
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                              <TrafficLightInput 
-                                label="Invoice Amount ($)"
+                                label="Purchase Price ($)"
                                 fieldState={fields["invoiceAmount"]}
                                 onValueChange={v => updateField("invoiceAmount", v)}
                                 onBlurField={() => handleBlur("invoiceAmount")}
@@ -575,20 +594,45 @@ export function PrivateSaleInvoiceTab() {
                             )}
                         </div>
                         
-                        <div className="space-y-4">
-                            <div className="flex items-center space-x-2">
-                                <Checkbox id="sigVendor" checked={includeVendorSig} onCheckedChange={c => setIncludeVendorSig(!!c)} />
-                                <Label htmlFor="sigVendor">Include Vendor Signature Line</Label>
+                        <div className="space-y-2">
+                            <Label>Deposit Paid ($)</Label>
+                            <Input
+                                data-testid="input-deposit-amount"
+                                type="number"
+                                min="0"
+                                value={depositAmount}
+                                onChange={e => setDepositAmount(e.target.value)}
+                                placeholder="0"
+                                className="text-lg"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Total Disbursements ($)</Label>
+                            <div className="text-2xl font-bold text-[#1f2a44] pt-1">
+                                {formatCurrency(Math.max(0, parseFloat(fields["invoiceAmount"]?.value || "0") - parseFloat(depositAmount || "0")))}
                             </div>
-                            <div className="flex items-center space-x-2">
-                                <Checkbox id="sigBuyer" checked={includeBuyerSig} onCheckedChange={c => setIncludeBuyerSig(!!c)} />
-                                <Label htmlFor="sigBuyer">Include Buyer Signature Line</Label>
-                            </div>
+                            <p className="text-xs text-slate-500">Purchase Price - Deposit</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="sigVendor" checked={includeVendorSig} onCheckedChange={c => setIncludeVendorSig(!!c)} />
+                            <Label htmlFor="sigVendor">Include Vendor Signature Line</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="sigBuyer" checked={includeBuyerSig} onCheckedChange={c => setIncludeBuyerSig(!!c)} />
+                            <Label htmlFor="sigBuyer">Include Buyer Signature Line</Label>
                         </div>
                     </div>
 
                     <div className="mt-8">
-                        <DisbursementTable disbursements={disbursements} onChange={setDisbursements} />
+                        <DisbursementTable 
+                            disbursements={disbursements} 
+                            onChange={setDisbursements} 
+                            targetTotal={Math.max(0, parseFloat(fields["invoiceAmount"]?.value || "0") - parseFloat(depositAmount || "0"))}
+                        />
                     </div>
                 </div>
 

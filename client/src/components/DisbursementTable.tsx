@@ -1,17 +1,17 @@
-import { useState } from "react";
 import { PrivateSaleDisbursement } from "@/lib/privateSale/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, AlertTriangle, CheckCircle } from "lucide-react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/money";
 
 interface DisbursementTableProps {
   disbursements: PrivateSaleDisbursement[];
   onChange: (items: PrivateSaleDisbursement[]) => void;
+  targetTotal?: number;
 }
 
-export function DisbursementTable({ disbursements, onChange }: DisbursementTableProps) {
+export function DisbursementTable({ disbursements, onChange, targetTotal }: DisbursementTableProps) {
   
   const addRow = () => {
     const newRow: PrivateSaleDisbursement = {
@@ -36,12 +36,19 @@ export function DisbursementTable({ disbursements, onChange }: DisbursementTable
   };
 
   const total = disbursements.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const hasTarget = targetTotal !== undefined;
+  const variance = hasTarget ? total - (targetTotal || 0) : 0;
+  const isBalanced = Math.abs(variance) < 0.01;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
          <h4 className="text-sm font-semibold text-slate-700">Disbursements</h4>
-         <span className="text-xs text-slate-500">Included in total payable</span>
+         {hasTarget && (
+           <span className="text-xs text-slate-500">
+             Target: {formatCurrency(targetTotal || 0)}
+           </span>
+         )}
       </div>
       
       <div className="border border-slate-200 rounded-md overflow-hidden">
@@ -110,11 +117,21 @@ export function DisbursementTable({ disbursements, onChange }: DisbursementTable
       </div>
 
       <div className="flex items-center justify-between">
-        <Button variant="outline" size="sm" onClick={addRow} className="text-xs">
+        <Button variant="outline" size="sm" onClick={addRow} className="text-xs" data-testid="button-add-disbursement">
             <Plus className="w-3 h-3 mr-1" /> Add Disbursement
         </Button>
-        <div className="text-sm font-medium text-slate-700">
-            Total Disbursements: <span className="text-primary">{formatCurrency(total)}</span>
+        <div className="text-sm font-medium text-slate-700 flex items-center gap-2">
+            Total: <span className={hasTarget && !isBalanced ? "text-red-600" : "text-primary"}>{formatCurrency(total)}</span>
+            {hasTarget && (
+              isBalanced ? (
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              ) : (
+                <span className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {variance > 0 ? `Over by ${formatCurrency(variance)}` : `Short by ${formatCurrency(Math.abs(variance))}`}
+                </span>
+              )
+            )}
         </div>
       </div>
     </div>
