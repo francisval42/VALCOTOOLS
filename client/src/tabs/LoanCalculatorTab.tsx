@@ -33,6 +33,8 @@ export function LoanCalculatorTab() {
   const [deposit, setDeposit] = useState<number>(0);
   const [tradeIn, setTradeIn] = useState<number>(0);
   const [payout, setPayout] = useState<number>(0);
+  const [originationFee, setOriginationFee] = useState<number>(0);
+  const [lenderEstablishmentFee, setLenderEstablishmentFee] = useState<number>(0);
 
   const [termMonths, setTermMonths] = useState<number>(60);
   const [annualRate, setAnnualRate] = useState<number>(12.95);
@@ -47,8 +49,8 @@ export function LoanCalculatorTab() {
   const [showErrors, setShowErrors] = useState(false);
 
   const amountFinanced = useMemo(() => 
-    round2(calculateAmountFinanced(vehiclePrice, deposit, tradeIn, payout)),
-    [vehiclePrice, deposit, tradeIn, payout]
+    round2(calculateAmountFinanced(vehiclePrice, deposit, tradeIn, payout, originationFee, lenderEstablishmentFee)),
+    [vehiclePrice, deposit, tradeIn, payout, originationFee, lenderEstablishmentFee]
   );
 
   const repayments = useMemo(() => {
@@ -115,6 +117,8 @@ export function LoanCalculatorTab() {
       deposit,
       tradeIn,
       payout,
+      originationFee,
+      lenderEstablishmentFee,
       termMonths,
       annualRate,
       balloonAmount,
@@ -231,8 +235,34 @@ export function LoanCalculatorTab() {
               </div>
             </div>
             
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <Label>Origination Fee</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={originationFee || ""}
+                  onChange={e => setOriginationFee(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  data-testid="input-origination-fee"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Lender Establishment Fee</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={lenderEstablishmentFee || ""}
+                  onChange={e => setLenderEstablishmentFee(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  data-testid="input-lender-establishment-fee"
+                />
+              </div>
+            </div>
+            
             <div className="mt-4 p-3 bg-slate-50 rounded-lg flex justify-between items-center">
-              <span className="text-sm text-slate-600">Amount Financed = Price − Deposit − Trade in + Payout</span>
+              <span className="text-sm text-slate-600">Amount Financed = Price − Deposit − Trade in + Payout + Fees</span>
               <span className="text-lg font-bold text-primary" data-testid="text-amount-financed">{formatCurrency(amountFinanced)}</span>
             </div>
           </div>

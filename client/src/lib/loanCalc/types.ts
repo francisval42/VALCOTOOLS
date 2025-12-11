@@ -3,6 +3,8 @@ export type LoanCalcForm = {
   deposit: number;
   tradeIn: number;
   payout: number;
+  originationFee: number;
+  lenderEstablishmentFee: number;
   termMonths: number;
   annualRate: number;
   balloonAmount: number;
@@ -19,9 +21,11 @@ export function calculateAmountFinanced(
   vehiclePrice: number,
   deposit: number,
   tradeIn: number,
-  payout: number
+  payout: number,
+  originationFee: number = 0,
+  lenderEstablishmentFee: number = 0
 ): number {
-  return vehiclePrice - deposit - tradeIn + payout;
+  return vehiclePrice - deposit - tradeIn + payout + originationFee + lenderEstablishmentFee;
 }
 
 export function calculateRepayments(
