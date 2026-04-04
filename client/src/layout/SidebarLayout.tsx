@@ -12,7 +12,8 @@ export function SidebarLayout({ children, activeTab, onTabChange }: SidebarLayou
     <div className="flex min-h-screen bg-background font-sans">
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-[280px] bg-sidebar text-sidebar-foreground flex flex-col shadow-xl z-10">
-        <div className="h-20 flex items-center px-8 border-b border-white/10">
+        <div className="h-20 flex items-center px-8 border-b border-white/10 gap-3">
+          <img src="/favicon.svg" alt="Valco OS" className="w-10 h-10 rounded-lg flex-shrink-0" />
           <h1 className="text-2xl font-bold tracking-wide text-white">
             VALCO <span className="text-primary">OS</span>
           </h1>
