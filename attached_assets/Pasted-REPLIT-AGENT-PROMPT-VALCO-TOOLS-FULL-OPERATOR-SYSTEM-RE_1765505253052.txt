@@ -1,0 +1,154 @@
+REPLIT AGENT PROMPT – VALCO TOOLS FULL OPERATOR SYSTEM REPORT
+
+Context
+You are operating inside an internal tool called VALCO TOOLS, used day to day by brokers to support real lending workflows. This app is not public-facing marketing software. It exists to reduce friction, error, and cognitive load in live broking operations.
+
+I need a complete, factual inventory of what this system currently is and does.
+
+Task
+Produce a comprehensive operator-level system report of the VALCO TOOLS application as it exists today.
+
+This is not a roadmap, a pitch, or a feature summary.
+It is a practical description of an internal working system.
+
+Required output structure
+1. System intent and operating context
+
+What this tool is designed to support in day to day broking work.
+
+Who uses it (roles, not personas).
+
+Where it sits in the broader workflow (before, during, or after lender submission).
+
+Do not speculate beyond what is observable in the app and code.
+
+2. Tool inventory
+
+List every tool, calculator, utility, or module contained in VALCO TOOLS.
+
+For each tool, document:
+
+Name
+
+Purpose
+
+Inputs required
+
+Outputs generated
+
+How brokers typically use it in practice
+
+3. Functional behaviour
+
+For each tool or major function:
+
+Step by step behaviour from user interaction to output
+
+Any validation or assumptions applied
+
+Edge cases handled or ignored
+
+What happens on failure or invalid input
+
+Be explicit and procedural.
+
+4. Data handling
+
+Document:
+
+What data is entered
+
+What data is stored (if any)
+
+What data is transient only
+
+Whether anything persists between sessions
+
+If no data is stored, say so clearly.
+
+5. Integrations and dependencies
+
+List any:
+
+External APIs
+
+Internal shared logic
+
+Calculation formulas
+
+Reference tables or constants
+
+Explain when and how these are invoked.
+
+6. UX and operator experience
+
+Describe:
+
+How the UI is structured for speed or clarity
+
+Whether tools are optimised for repetition
+
+How error states are communicated
+
+How confidence in outputs is reinforced
+
+This should reflect real operator usage, not design intent.
+
+7. Constraints and limitations
+
+List:
+
+Hard-coded assumptions
+
+Jurisdiction-specific logic
+
+Incomplete or experimental tools
+
+Known limitations or shortcuts taken
+
+This section is mandatory. Do not omit weaknesses.
+
+8. Architecture and stack
+
+Document:
+
+Frameworks and libraries
+
+File structure overview
+
+How tools are modularised
+
+Shared utilities or patterns
+
+Explain structure only where it is evident.
+
+9. Evolution and intent signals
+
+If the codebase suggests:
+
+tools added in response to recurring broker pain
+
+refactors
+
+deprecated tools
+
+experiments
+
+Summarise these patterns briefly.
+
+Only include what can be reasonably inferred.
+
+Output rules
+
+Be factual and specific.
+
+Do not market or exaggerate.
+
+Do not suggest improvements.
+
+Use clear headings and bullet points.
+
+If something is unclear or undocumented, state that explicitly.
+
+Tone
+Operator-grade. Neutral. Exact.
