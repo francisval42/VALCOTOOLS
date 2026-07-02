@@ -12,7 +12,8 @@ function joinWithAnd(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-function lowercaseFirst(str: string): string {
+function safeLC(str: string): string {
+  if (/^[A-Z]{2}/.test(str)) return str;
   return str.charAt(0).toLowerCase() + str.slice(1);
 }
 
@@ -22,38 +23,48 @@ export function generateNote(data: FormData): GeneratedNote {
   const loanTypeText = loanType ? LOAN_TYPE_TEXT[loanType] : "loan";
   const loanAmountFormatted = formatCurrency(loanAmount);
   const monthlyBudgetFormatted = formatCurrency(monthlyBudget);
-  const rateTypeText = rateType || "fixed";
+  const isFixed = rateType === "fixed";
 
-  const clientObjectives = `${firstName} ${lastName} seeks a ${loanAmountFormatted} ${loanTypeText} to ${purpose}. The client requires a ${term}-month term with a ${rateTypeText} rate to provide payment certainty and budgeting predictability. The proposed loan structure aligns with ${firstName}'s financial capacity and objectives, enabling them to achieve their stated purpose while maintaining sustainable repayment obligations.`;
+  // Bug 1 fix: branch clientObjectives rate sentence on rate type
+  const rateObjectiveSentence = isFixed
+    ? `The client requires a ${term}-month term with a fixed rate to provide payment certainty and budgeting predictability.`
+    : `The client requires a ${term}-month term with a variable rate, selected for ${joinWithAnd(rateTypeReasons.map(r => safeLC(r)))}.`;
+
+  // Bug 3 fix: use firstName consistently (no "them/their"), fix "loan purpose of" grammar
+  const clientObjectives = `${firstName} ${lastName} seeks a ${loanAmountFormatted} ${loanTypeText} to ${purpose}. ${rateObjectiveSentence} The proposed loan structure aligns with ${firstName}'s financial capacity and objectives, enabling ${firstName} to achieve the stated purpose while maintaining sustainable repayment obligations.`;
 
   let balloonPayment: string | undefined;
   if (loanType === "consumer_car") {
     balloonPayment = `No balloon payment has been included in this loan structure. The loan will be fully amortised over the ${term}-month term, providing ${firstName} with complete ownership at maturity without any additional lump-sum requirement.`;
   }
 
-  const rateReasonsList = rateTypeReasons.map(r => lowercaseFirst(r));
+  // Bug 1 fix: branch interestRateType wording on rate type — no certainty/predictability for variable
+  const rateReasonsList = rateTypeReasons.map(r => safeLC(r));
   let reasonsSentence = joinWithAnd(rateReasonsList);
   if (rateTypeAdditionalJustification.trim()) {
     reasonsSentence += `. ${rateTypeAdditionalJustification.trim()}`;
   }
-  const interestRateType = `A ${rateTypeText} interest rate has been recommended for this loan based on the following considerations: ${reasonsSentence}. This rate structure supports ${firstName}'s preference for predictable repayments and aligns with current market conditions and the client's risk profile.`;
+  const rateClosingSentence = isFixed
+    ? `This rate structure supports ${firstName}'s preference for predictable repayments and aligns with current market conditions and the client's risk profile.`
+    : `This rate structure gives ${firstName} the flexibility to benefit from favourable market movements and aligns with the client's preference for lower initial costs and repayment flexibility.`;
+  const interestRateType = `A ${rateType} interest rate has been recommended for this loan based on the following considerations: ${reasonsSentence}. ${rateClosingSentence}`;
 
-  const incomeText = joinWithAnd(incomeVerification.map(v => lowercaseFirst(v)));
-  let expenseText: string;
-  if (expenseVerification.includes("Client interview")) {
-    expenseText = "Expenses were ascertained through a client interview and benchmarked against the Household Expenditure Measure (HEM).";
-  } else {
-    expenseText = `Expense verification includes ${joinWithAnd(expenseVerification.map(v => lowercaseFirst(v)))}.`;
-  }
+  // Bug 2 fix: list ALL selected income verification methods
+  const incomeText = joinWithAnd(incomeVerification.map(v => safeLC(v)));
+
+  // Bug 2 fix: list ALL selected expense verification methods; only mention HEM if HEM was actually selected
+  const expenseList = joinWithAnd(expenseVerification.map(v => safeLC(v)));
+  const expenseText = `Expenses were verified through ${expenseList}.`;
+
   let affordabilityText: string;
   if (isAffordabilityFlagged) {
-    affordabilityText = `While the client's monthly budget of ${monthlyBudgetFormatted} is below the standard minimum threshold, the following justification supports the loan's viability: ${affordabilityJustification}.`;
+    affordabilityText = `While ${firstName}'s monthly budget of ${monthlyBudgetFormatted} is below the standard minimum threshold, the following justification supports the loan's viability: ${affordabilityJustification}.`;
   } else {
-    affordabilityText = `The client's monthly budget of ${monthlyBudgetFormatted} provides adequate servicing capacity for the proposed loan repayments with an appropriate buffer for financial resilience.`;
+    affordabilityText = `${firstName}'s monthly budget of ${monthlyBudgetFormatted} provides adequate servicing capacity for the proposed loan repayments with an appropriate buffer for financial resilience.`;
   }
   const reasonableEnquiry = `Comprehensive income verification has been conducted through ${incomeText}. ${expenseText} ${affordabilityText}`;
 
-  const lenderReasonsList = lenderReasons.map(r => lowercaseFirst(r));
+  const lenderReasonsList = lenderReasons.map(r => safeLC(r));
   let lenderReasonsSentence = joinWithAnd(lenderReasonsList);
   if (lenderAdditionalJustification.trim()) {
     lenderReasonsSentence += `. ${lenderAdditionalJustification.trim()}`;
@@ -66,31 +77,35 @@ export function generateNote(data: FormData): GeneratedNote {
     otherLendersText = `Other lenders were considered during the assessment process. ${exclusions}`;
   }
 
-  let securityText: string;
-  if (loanType === "consumer_car") {
-    securityText = "the secured structure with the motor vehicle being financed as security enables access to competitive interest rates";
-  } else if (data.isSecured && securityDescription.trim()) {
-    securityText = `the secured structure with ${securityDescription} as security enables access to competitive interest rates`;
-  } else if (data.isSecured) {
-    securityText = "the secured structure enables access to competitive interest rates";
-  } else {
-    securityText = "the unsecured structure provides flexibility without requiring security";
+  // Bug 4 fix: only build security clause for secured loan types
+  let suitabilitySecurityClause = "";
+  if (data.isSecured) {
+    let securityText: string;
+    if (loanType === "consumer_car") {
+      securityText = "the secured structure with the motor vehicle being financed as security enables access to competitive interest rates";
+    } else if (securityDescription.trim()) {
+      securityText = `the secured structure with ${securityDescription} as security enables access to competitive interest rates`;
+    } else {
+      securityText = "the secured structure enables access to competitive interest rates";
+    }
+    suitabilitySecurityClause = `, while ${securityText}`;
   }
 
   let suitabilityText: string;
   if (isAffordabilityFlagged) {
-    suitabilityText = `The ${term}-month term has been structured considering the client's specific circumstances and the justification provided for affordability`;
+    suitabilityText = `The ${term}-month term has been structured considering ${firstName}'s specific circumstances and the justification provided for affordability`;
   } else {
-    suitabilityText = `The ${term}-month term provides manageable repayments within the client's demonstrated capacity`;
+    suitabilityText = `The ${term}-month term provides manageable repayments within ${firstName}'s demonstrated capacity`;
   }
 
-  const suitabilityAssessment = `The proposed ${loanTypeText} is suitable for ${firstName} ${lastName}'s circumstances, taking into consideration verified income, assessed expenses and stated objectives. ${suitabilityText}, while ${securityText}. The loan purpose of ${purpose} represents responsible financial management and aligns with the client's stated goals.`;
+  // Bug 3 fix: "stated loan purpose — X —" instead of "loan purpose of X"
+  const suitabilityAssessment = `The proposed ${loanTypeText} is suitable for ${firstName} ${lastName}'s circumstances, taking into consideration verified income, assessed expenses and stated objectives. ${suitabilityText}${suitabilitySecurityClause}. The stated loan purpose — ${purpose} — represents responsible financial management and aligns with ${firstName}'s stated goals.`;
 
   let changeInCircumstancesText: string;
   if (changeInCircumstances === "yes") {
-    changeInCircumstancesText = `A material change in circumstances has been identified: ${changeDescription}. The following mitigation measures have been implemented: ${changeMitigation}. These measures ensure the client maintains capacity to service the proposed loan.`;
+    changeInCircumstancesText = `A material change in circumstances has been identified: ${changeDescription}. The following mitigation measures have been implemented: ${changeMitigation}. These measures ensure ${firstName} maintains capacity to service the proposed loan.`;
   } else {
-    changeInCircumstancesText = `No material change in circumstances has been identified that would impact the client's ability to service the proposed loan. ${firstName}'s employment and financial position remain stable and consistent with the initial assessment.`;
+    changeInCircumstancesText = `No material change in circumstances has been identified that would impact ${firstName}'s ability to service the proposed loan. ${firstName}'s employment and financial position remain stable and consistent with the initial assessment.`;
   }
 
   return {
