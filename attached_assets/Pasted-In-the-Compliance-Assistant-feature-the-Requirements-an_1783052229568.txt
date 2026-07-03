@@ -1,0 +1,22 @@
+In the Compliance Assistant feature (the "Requirements and Objectives" note generator), the generated note text doesn't reflect the actual inputs. Please fix the following bugs. Don't change any other behaviour or formatting.
+
+1) RATE RATIONALE MUST MATCH THE SELECTED RATE TYPE.
+Currently, even when I select a Variable rate, the note says the rate provides "payment certainty and budgeting predictability" (in the [Client Objectives] section) and "supports [the client's] preference for predictable repayments" (in the [Interest Rate Type] section). That wording is only correct for a Fixed rate and is factually wrong / a compliance risk for a Variable rate.
+- Make both the [Client Objectives] and [Interest Rate Type] paragraphs branch on the selected rate type.
+- FIXED rate: certainty / predictability wording is fine.
+- VARIABLE rate: remove ALL certainty/predictability wording. Justify the choice using the variable-rate benefits the user actually ticked under "Reasons for variable rate" (e.g. lower initial rate, flexibility to make extra/early repayments, benefit if market rates fall, no/low break costs if refinancing).
+- A variable rate must never be described as providing repayment certainty or predictability.
+
+2) VERIFICATION SENTENCES MUST LIST ALL SELECTED ITEMS.
+The expense verification sentence currently mentions only the first selected expense method and then always appends "benchmarked against the Household Expenditure Measure (HEM)" even when HEM was NOT selected.
+- Rebuild it to list ALL expense verification methods the user ticked, and only mention HEM if HEM is actually one of the selected options.
+- Apply the same "list every selected item, invent nothing" logic to income verification.
+
+3) GRAMMAR / MERGE-FIELD FIXES.
+- The loan purpose is injected raw, producing text like "The loan purpose of purchase a motor vehicle for personal use". Make it read grammatically (e.g. "...to purchase a motor vehicle for personal use").
+- Fix pronoun consistency: the note switches between the client's name and "them/their" in the same note. Keep it consistently third person using the client's name.
+
+4) SECURED-STRUCTURE CLAIM MUST BE CONDITIONAL.
+The [Suitability Assessment] asserts "the secured structure with the motor vehicle being financed as security". Only include this for secured loan types (Consumer Car / Secured Personal); do not include it for Unsecured Personal.
+
+After the change, generating a Variable-rate note should contain no "certainty/predictability" language, and the verification sentences should exactly match the boxes I ticked.

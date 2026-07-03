@@ -46,7 +46,7 @@ export function generateNote(data: FormData): GeneratedNote {
   }
   const rateClosingSentence = isFixed
     ? `This rate structure supports ${firstName}'s preference for predictable repayments and aligns with current market conditions and the client's risk profile.`
-    : `This rate structure gives ${firstName} the flexibility to benefit from favourable market movements and aligns with the client's preference for lower initial costs and repayment flexibility.`;
+    : `This rate structure aligns with ${firstName}'s stated objectives and the considerations outlined above, and is consistent with current market conditions and the client's risk profile.`;
   const interestRateType = `A ${rateType} interest rate has been recommended for this loan based on the following considerations: ${reasonsSentence}. ${rateClosingSentence}`;
 
   // Bug 2 fix: list ALL selected income verification methods
