@@ -18,7 +18,7 @@ function safeLC(str: string): string {
 }
 
 export function generateNote(data: FormData): GeneratedNote {
-  const { firstName, lastName, loanType, purpose, term, rateType, loanAmount, monthlyBudget, isAffordabilityFlagged, affordabilityJustification, lender, otherLenders, securityDescription, changeInCircumstances, changeDescription, changeMitigation, rateTypeReasons, rateTypeAdditionalJustification, lenderReasons, lenderAdditionalJustification, incomeVerification, expenseVerification } = data;
+  const { firstName, lastName, loanType, purpose, term, rateType, loanAmount, monthlyBudget, isAffordabilityFlagged, affordabilityJustification, lender, otherLenders, securityDescription, changeInCircumstances, changeDescription, changeMitigation, rateTypeReasons, rateTypeRuledOutReasons, rateTypeAdditionalJustification, lenderReasons, lenderAdditionalJustification, incomeVerification, expenseVerification } = data;
 
   const loanTypeText = loanType ? LOAN_TYPE_TEXT[loanType] : "loan";
   const loanAmountFormatted = formatCurrency(loanAmount);
@@ -38,16 +38,31 @@ export function generateNote(data: FormData): GeneratedNote {
     balloonPayment = `No balloon payment has been included in this loan structure. The loan will be fully amortised over the ${term}-month term, providing ${firstName} with complete ownership at maturity without any additional lump-sum requirement.`;
   }
 
-  // Bug 1 fix: branch interestRateType wording on rate type — no certainty/predictability for variable
-  const rateReasonsList = rateTypeReasons.map(r => safeLC(r));
-  let reasonsSentence = joinWithAnd(rateReasonsList);
-  if (rateTypeAdditionalJustification.trim()) {
-    reasonsSentence += `. ${rateTypeAdditionalJustification.trim()}`;
+  // Interest rate type: narrate the chosen reasons, why the alternative was ruled out
+  // for this client, and the rate-movement sensitivity tied to the assessed budget.
+  const altRateLabel = isFixed ? "variable" : "fixed";
+
+  const chosenReasons = joinWithAnd(rateTypeReasons.map(r => safeLC(r)));
+  const chosenSentence = `A ${rateType} interest rate has been recommended for ${firstName} for the following reasons: ${chosenReasons}.`;
+
+  let ruledOutSentence = "";
+  if (rateTypeRuledOutReasons.length > 0) {
+    const ruledOutList = joinWithAnd(rateTypeRuledOutReasons.map(r => safeLC(r)));
+    ruledOutSentence = ` A ${altRateLabel} rate was considered but ruled out for this client for the following reasons: ${ruledOutList}.`;
   }
-  const rateClosingSentence = isFixed
-    ? `This rate structure supports ${firstName}'s preference for predictable repayments and aligns with current market conditions and the client's risk profile.`
-    : `This rate structure aligns with ${firstName}'s stated objectives and the considerations outlined above, and is consistent with current market conditions and the client's risk profile.`;
-  const interestRateType = `A ${rateType} interest rate has been recommended for this loan based on the following considerations: ${reasonsSentence}. ${rateClosingSentence}`;
+
+  const sensitivitySentence = isFixed
+    ? ` ${firstName} understands that a fixed rate can carry break costs if the loan is repaid early or refinanced within the fixed term, and has accepted this in exchange for repayment certainty.`
+    : ` ${firstName} understands that repayments on a variable rate can increase if interest rates rise. Based on the assessed monthly budget of ${monthlyBudgetFormatted}, ${firstName} has capacity to absorb reasonable movement in the rate.`;
+
+  let rateAdditional = "";
+  if (rateTypeAdditionalJustification.trim()) {
+    rateAdditional = ` ${rateTypeAdditionalJustification.trim()}`;
+  }
+
+  const rateClosingSentence = ` This recommendation is consistent with ${firstName}'s stated objectives and risk profile, and with current market conditions.`;
+
+  const interestRateType = `${chosenSentence}${ruledOutSentence}${sensitivitySentence}${rateAdditional}${rateClosingSentence}`;
 
   // Bug 2 fix: list ALL selected income verification methods
   const incomeText = joinWithAnd(incomeVerification.map(v => safeLC(v)));
@@ -98,8 +113,8 @@ export function generateNote(data: FormData): GeneratedNote {
     suitabilityText = `The ${term}-month term provides manageable repayments within ${firstName}'s demonstrated capacity`;
   }
 
-  // Bug 3 fix: "stated loan purpose — X —" instead of "loan purpose of X"
-  const suitabilityAssessment = `The proposed ${loanTypeText} is suitable for ${firstName} ${lastName}'s circumstances, taking into consideration verified income, assessed expenses and stated objectives. ${suitabilityText}${suitabilitySecurityClause}. The stated loan purpose — ${purpose} — represents responsible financial management and aligns with ${firstName}'s stated goals.`;
+  // Style: use brackets around the stated purpose rather than em dashes.
+  const suitabilityAssessment = `The proposed ${loanTypeText} is suitable for ${firstName} ${lastName}'s circumstances, taking into consideration verified income, assessed expenses and stated objectives. ${suitabilityText}${suitabilitySecurityClause}. The stated loan purpose (${purpose}) represents responsible financial management and aligns with ${firstName}'s stated goals.`;
 
   let changeInCircumstancesText: string;
   if (changeInCircumstances === "yes") {
