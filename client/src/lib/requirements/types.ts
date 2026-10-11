@@ -22,6 +22,7 @@ export interface FormData {
   term: number;
   rateType: RateType;
   rateTypeReasons: string[];
+  rateTypeRuledOutReasons: string[];
   rateTypeAdditionalJustification: string;
   lender: string;
   lenderReasons: string[];
@@ -63,6 +64,23 @@ export const VARIABLE_RATE_REASONS = [
   "Potential for rate reductions",
   "No break costs if refinancing",
   "Benefit from market rate drops",
+] as const;
+
+// Reasons the FIXED option was ruled out — shown when the client has chosen a VARIABLE rate.
+export const FIXED_RULED_OUT_REASONS = [
+  "Wanted to avoid early termination or break penalties",
+  "Wanted to keep the option to repay early or refinance",
+  "Preferred to benefit if rates fall rather than lock in now",
+  "Fixed rate offered was higher than the variable option",
+] as const;
+
+// Reasons the VARIABLE option was ruled out — shown when the client has chosen a FIXED rate.
+export const VARIABLE_RULED_OUT_REASONS = [
+  "Wanted certainty of repayments over flexibility",
+  "Did not want exposure to rate rises",
+  "Prefers a set repayment amount for budgeting",
+  "Not planning to repay early, so break costs are not a concern",
+  "Wanted to remove the risk of repayments increasing",
 ] as const;
 
 export const LENDER_OPTIONS = [
@@ -122,6 +140,7 @@ export function getInitialFormData(): FormData {
     term: 0,
     rateType: "",
     rateTypeReasons: [],
+    rateTypeRuledOutReasons: [],
     rateTypeAdditionalJustification: "",
     lender: "",
     lenderReasons: [],
@@ -168,6 +187,7 @@ export interface ValidationErrors {
   term?: string;
   rateType?: string;
   rateTypeReasons?: string;
+  rateTypeRuledOutReasons?: string;
   lender?: string;
   lenderReasons?: string;
   incomeVerification?: string;
@@ -201,6 +221,7 @@ export function validateForm(data: FormData): ValidationErrors {
   
   if (!data.rateType) errors.rateType = "Rate type is required";
   if (data.rateTypeReasons.length === 0) errors.rateTypeReasons = "Select at least one reason";
+  if (data.rateTypeRuledOutReasons.length === 0) errors.rateTypeRuledOutReasons = "Select at least one reason the other option was ruled out";
   
   if (!data.lender.trim()) errors.lender = "Lender is required";
   if (data.lenderReasons.length === 0) errors.lenderReasons = "Select at least one reason";
